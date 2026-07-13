@@ -1,0 +1,25 @@
+{
+  // Auto format on save
+  "editor.formatOnSave": true,
+
+  // Go specific settings
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "golang.go"
+  },
+
+  // Go tools settings
+  "go.formatTool": "goimports",
+  "go.useLanguageServer": true,
+  "go.lintOnSave": "workspace",
+  "go.vetOnSave": "workspace",
+
+  // Tambahan untuk Makefile
+  "[makefile]": {
+    "editor.insertSpaces": false,
+    "editor.detectIndentation": false
+  }
+}

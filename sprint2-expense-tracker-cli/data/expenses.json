@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "amount": 1,
+    "category": "food",
+    "note": "makan",
+    "created_at": "0001-01-01T00:00:00Z"
+  },
+  {
+    "id": 2,
+    "amount": 1,
+    "category": "transport",
+    "note": "makan",
+    "created_at": "0001-01-01T00:00:00Z"
+  }
+]
