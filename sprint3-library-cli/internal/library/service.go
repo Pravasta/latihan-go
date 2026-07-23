@@ -62,6 +62,7 @@ func (s *Service) AddBook(title, author string) error {
 func (s *Service) ListBooks() ([]Book, error) {
 	books, err := s.bookStorage.Load()
 	if err != nil {
+
 		fmt.Printf("[ListBooks Error] Failed to load books: %v", err)
 		return nil, err
 	}

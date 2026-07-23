@@ -55,7 +55,7 @@ func handleLoanCommand(service *library.Service, args []string) error {
 
 	switch args[0] {
 	case "list":
-		return handleLoanBook(service, args[1:])
+		return handleLoanBook(service)
 	default:
 		return fmt.Errorf("unknown loan command: %s", args[0])
 	}
@@ -97,7 +97,7 @@ func handleListBooks(service *library.Service) error {
 	return nil
 }
 
-func handleLoanBook(service *library.Service, args []string) error {
+func handleLoanBook(service *library.Service) error {
 	// loanList
 	loans, err := service.ListActiveLoans()
 	if err != nil {

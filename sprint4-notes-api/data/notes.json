@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "title": "Notess Baru@",
+    "content": "Belajar net/http",
+    "created_at": "2026-07-15T17:17:52.25668+07:00",
+    "updated_at": "2026-07-17T14:14:02.755303+07:00"
+  },
+  {
+    "id": 3,
+    "title": "Cobaa Notes",
+    "content": "Mari Katakan",
+    "created_at": "2026-07-16T09:15:58.923915+07:00",
+    "updated_at": "2026-07-16T09:15:58.923915+07:00"
+  },
+  {
+    "id": 4,
+    "title": "Thee Lagend Of Ang",
+    "content": "Mari Katakan",
+    "created_at": "2026-07-17T14:14:34.085607+07:00",
+    "updated_at": "2026-07-17T14:14:34.085607+07:00"
+  }
+]
