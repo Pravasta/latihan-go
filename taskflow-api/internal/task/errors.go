@@ -11,4 +11,8 @@ var (
 	ErrInvalidProjectID            = errors.New("invalid project ID")
 	ErrInvalidTaskID               = errors.New("invalid task ID")
 	ErrProjectNotFound             = errors.New("project not found")
+	ErrInvalidSortField            = errors.New("invalid sort field")
+	ErrInvalidOrder                = errors.New("invalid order")
+	ErrInvalidPageNumber           = errors.New("invalid page number")
+	ErrInvalidLimitNumber          = errors.New("invalid limit number")
 )

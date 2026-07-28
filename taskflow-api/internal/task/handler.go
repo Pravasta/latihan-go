@@ -3,6 +3,7 @@ package task
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"taskflow-api/internal/common"
 )
 
@@ -144,7 +145,51 @@ func (h *Handler) ListTasks(
 	var (
 		defaultRes DefaultResponse
 		projectID  = r.PathValue("projectID")
+		limitStr   = r.URL.Query().Get("limit")
+		pageStr    = r.URL.Query().Get("page")
+		taskQuery  = TaskQuery{
+			Limit: 10, // Default limit
+			Page:  1,  // Default page
+		}
+		search = r.URL.Query().Get("search")
+		sort   = r.URL.Query().Get("sort")
+		order  = r.URL.Query().Get("order")
+		status = r.URL.Query().Get("status")
 	)
+
+	if limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			common.WriteError(w, http.StatusBadRequest, "Invalid limit number")
+			return
+		}
+		taskQuery.Limit = limit
+	}
+
+	if pageStr != "" {
+		page, err := strconv.Atoi(pageStr)
+		if err != nil || page < 1 {
+			common.WriteError(w, http.StatusBadRequest, "Invalid page number")
+			return
+		}
+		taskQuery.Page = page
+	}
+
+	if status != "" {
+		taskQuery.Status = TaskStatus(status)
+	}
+
+	if search != "" {
+		taskQuery.Search = search
+	}
+
+	if sort != "" {
+		taskQuery.Sort = sort
+	}
+
+	if order != "" {
+		taskQuery.Order = Order(order)
+	}
 
 	ownerID, ok := common.GetUserID(r.Context())
 	if !ok {
@@ -152,7 +197,7 @@ func (h *Handler) ListTasks(
 		return
 	}
 
-	tasks, err := h.service.List(ownerID, projectID)
+	tasks, err := h.service.List(ownerID, projectID, taskQuery)
 	if err != nil {
 		switch err {
 		case ErrInvalidOwnerID, ErrInvalidProjectID:
@@ -161,6 +206,9 @@ func (h *Handler) ListTasks(
 		case ErrProjectNotFound:
 			defaultRes.Message = err.Error()
 			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
+		case ErrInvalidPageNumber, ErrInvalidLimitNumber, ErrInvalidTaskStatus, ErrInvalidSortField, ErrInvalidOrder:
+			defaultRes.Message = err.Error()
+			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
 		default:
 			defaultRes.Message = "Internal server error"
 			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
@@ -169,7 +217,8 @@ func (h *Handler) ListTasks(
 	}
 
 	defaultRes.Message = "Tasks retrieved successfully"
-	defaultRes.Data = tasks
+	defaultRes.Data = tasks.Tasks
+	defaultRes.Meta = tasks.PaginationMeta
 	common.WriteJSON(w, http.StatusOK, defaultRes)
 }
 
