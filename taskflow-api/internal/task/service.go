@@ -3,6 +3,7 @@ package task
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"taskflow-api/internal/project"
 	"time"
@@ -25,7 +26,8 @@ type Service interface {
 	List(
 		ownerID,
 		projectID string,
-	) ([]Task, error)
+		query TaskQuery,
+	) (*TaskListResult, error)
 	GetByID(
 		ownerID,
 		projectID,
@@ -214,7 +216,7 @@ func (s *service) GetByID(ownerID string, projectID string, taskID string) (*Tas
 }
 
 // List implements Service.
-func (s *service) List(ownerID string, projectID string) ([]Task, error) {
+func (s *service) List(ownerID string, projectID string, query TaskQuery) (*TaskListResult, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -237,20 +239,161 @@ func (s *service) List(ownerID string, projectID string) ([]Task, error) {
 		return nil, ErrProjectNotFound
 	}
 
+	filtered := make([]Task, 0)
+	var search string
+	var status TaskStatus
+	page := query.Page
+	if page < 1 {
+		return nil, ErrInvalidPageNumber
+	}
+	limit := query.Limit
+	if limit < 1 || limit > 100 {
+		return nil, ErrInvalidLimitNumber
+	}
+
+	sortBy := query.Sort
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+
+	order := query.Order
+	if order == "" {
+		order = OrderDesc
+	}
+
+	if query.Status != "" {
+		if !isValidStatus(query.Status) {
+			fmt.Printf("[Service List] Invalid status filter: %s\n", query.Status)
+			return nil, ErrInvalidTaskStatus
+		}
+
+		status = query.Status
+	}
+
+	if query.Search != "" {
+		search = strings.ToLower(query.Search)
+	}
+
+	if query.Sort != "" {
+		if !isValidSort(query.Sort) {
+			fmt.Printf("[Service List] Invalid sort field: %s\n", query.Sort)
+			return nil, ErrInvalidSortField
+		}
+	}
+
+	if query.Order != "" {
+		if !isValidOrder(query.Order) {
+			fmt.Printf("[Service List] Invalid order: %s\n", query.Order)
+			return nil, ErrInvalidOrder
+		}
+	}
+
 	tasks, err := s.storage.Load()
 	if err != nil {
 		fmt.Printf("[Service List] Failed to load tasks: %v\n", err)
 		return nil, err
 	}
 
-	var projectTasks []Task
 	for _, t := range tasks {
 		if t.ProjectID == projectID {
-			projectTasks = append(projectTasks, t)
+			filtered = append(filtered, t)
 		}
 	}
 
-	return projectTasks, nil
+	// Apply status filter
+	if status != "" {
+		var statusFiltered []Task
+		for _, t := range filtered {
+			if t.Status == status {
+				statusFiltered = append(statusFiltered, t)
+			}
+		}
+		filtered = statusFiltered
+	}
+
+	// Apply search filter
+	if search != "" {
+		var searchFiltered []Task
+		for _, t := range filtered {
+			if strings.Contains(strings.ToLower(t.Title), search) || strings.Contains(strings.ToLower(t.Description), search) {
+				searchFiltered = append(searchFiltered, t)
+			}
+		}
+		filtered = searchFiltered
+	}
+
+	// Apply sorting
+	switch sortBy {
+	case "title":
+		if order == OrderAsc {
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].Title < filtered[j].Title
+			})
+		} else {
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].Title > filtered[j].Title
+			})
+		}
+	case "created_at":
+		if order == OrderAsc {
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].CreatedAt.Before(filtered[j].CreatedAt)
+			})
+		} else {
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].CreatedAt.After(filtered[j].CreatedAt)
+			})
+		}
+	case "updated_at":
+		if order == OrderAsc {
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].UpdatedAt.Before(filtered[j].UpdatedAt)
+			})
+		} else {
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].UpdatedAt.After(filtered[j].UpdatedAt)
+			})
+		}
+	default:
+		fmt.Printf("[Service List] Invalid sort field: %s\n", sortBy)
+		return nil, ErrInvalidSortField
+	}
+
+	totalCount := len(filtered)
+
+	// Apply pagination
+	start := (page - 1) * limit
+	end := start + limit
+
+	totalPages := (totalCount + limit - 1) / limit
+
+	if start >= len(filtered) {
+		return &TaskListResult{
+			Tasks: []Task{},
+			PaginationMeta: PaginationMeta{
+				Page:       page,
+				Limit:      limit,
+				Total:      totalCount,
+				TotalPages: totalPages,
+			},
+		}, nil
+	}
+
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+
+	filtered = filtered[start:end]
+
+	return &TaskListResult{
+		Tasks: filtered,
+		PaginationMeta: PaginationMeta{
+			Page:       page,
+			Limit:      limit,
+			Total:      totalCount,
+			TotalPages: totalPages,
+		},
+	}, nil
 }
 
 // Update implements Service.
@@ -402,6 +545,24 @@ func isValidTransition(currentStatus, newStatus TaskStatus) bool {
 		return newStatus == TaskStatusDone
 	case TaskStatusDone:
 		return false
+	default:
+		return false
+	}
+}
+
+func isValidSort(sort string) bool {
+	switch sort {
+	case "title", "created_at", "updated_at":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidOrder(order Order) bool {
+	switch order {
+	case OrderAsc, OrderDesc:
+		return true
 	default:
 		return false
 	}

@@ -3,8 +3,9 @@ package task
 import "time"
 
 type DefaultResponse struct {
-	Message string `json:"message"`
-	Data    any    `json:"data,omitempty"`
+	Message string         `json:"message"`
+	Data    any            `json:"data,omitempty"`
+	Meta    PaginationMeta `json:"meta,omitempty"`
 }
 
 type CreateTaskResponse struct {
@@ -25,4 +26,11 @@ type UpdateTaskResponse struct {
 	Status      TaskStatus `json:"status"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+type PaginationMeta struct {
+	Page       int `json:"page"`
+	Limit      int `json:"limit"`
+	Total      int `json:"total"`
+	TotalPages int `json:"total_pages"`
 }
