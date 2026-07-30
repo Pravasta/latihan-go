@@ -1,7 +1,6 @@
 package project
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,7 +39,6 @@ func (s *service) Create(ownerID string, name string, description string) (*Proj
 
 	projects, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Create] Failed to load projects: %v\n", err)
 		return nil, err
 	}
 
@@ -59,7 +57,6 @@ func (s *service) Create(ownerID string, name string, description string) (*Proj
 
 	err = s.storage.Save(projects)
 	if err != nil {
-		fmt.Printf("[Service Create] Failed to save projects: %v\n", err)
 		return nil, err
 	}
 
@@ -78,23 +75,16 @@ func (s *service) Delete(ownerID string, projectID string) error {
 
 	projects, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Delete] Failed to load projects: %v\n", err)
 		return err
 	}
 
 	for i, p := range projects {
 		if p.ID == projectID && p.OwnerID == ownerID {
 			projects = append(projects[:i], projects[i+1:]...)
-			err = s.storage.Save(projects)
-			if err != nil {
-				fmt.Printf("[Service Delete] Failed to save projects: %v\n", err)
-				return err
-			}
-			return nil
+			return s.storage.Save(projects)
 		}
 	}
 
-	fmt.Printf("[Service Delete] Project with ID %s not found for owner %s\n", projectID, ownerID)
 	return ErrProjectNotFound
 }
 
@@ -110,7 +100,6 @@ func (s *service) GetByID(ownerID string, projectID string) (*Project, error) {
 
 	projects, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service GetByID] Failed to load projects: %v\n", err)
 		return nil, err
 	}
 
@@ -120,7 +109,6 @@ func (s *service) GetByID(ownerID string, projectID string) (*Project, error) {
 		}
 	}
 
-	fmt.Printf("[Service GetByID] Project with ID %s not found for owner %s\n", projectID, ownerID)
 	return nil, ErrProjectNotFound
 }
 
@@ -132,7 +120,6 @@ func (s *service) ListByOwner(ownerID string) ([]Project, error) {
 
 	projects, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service ListByOwner] Failed to load projects: %v\n", err)
 		return nil, err
 	}
 
@@ -166,7 +153,6 @@ func (s *service) Update(ownerID string, projectID string, name string, descript
 
 	projects, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Update] Failed to load projects: %v\n", err)
 		return nil, err
 	}
 
@@ -177,16 +163,13 @@ func (s *service) Update(ownerID string, projectID string, name string, descript
 			p.UpdatedAt = time.Now()
 			projects[i] = p
 
-			err = s.storage.Save(projects)
-			if err != nil {
-				fmt.Printf("[Service Update] Failed to save projects: %v\n", err)
+			if err := s.storage.Save(projects); err != nil {
 				return nil, err
 			}
 			return &p, nil
 		}
 	}
 
-	fmt.Printf("[Service Update] Project with ID %s not found for owner %s\n", projectID, ownerID)
 	return nil, ErrProjectNotFound
 }
 
