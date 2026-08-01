@@ -4,8 +4,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// bcryptCost is set above bcrypt.DefaultCost (10) to raise the work factor
+// for offline brute-force attempts against a leaked user store.
+const bcryptCost = 14
+
 func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 
 	if err != nil {
 		return "", err

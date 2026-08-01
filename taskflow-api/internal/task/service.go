@@ -2,7 +2,6 @@ package task
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"taskflow-api/internal/project"
@@ -64,8 +63,6 @@ func (s *service) Create(ownerID string, projectID string, title string, descrip
 		return nil, ErrInvalidOwnerID
 	}
 
-	fmt.Printf("[Service Create] Creating task for ownerID: %s, projectID: %s, title: %s\n", ownerID, projectID, title)
-
 	newProjectID := strings.TrimSpace(projectID)
 	if newProjectID == "" {
 		return nil, ErrInvalidProjectID
@@ -78,25 +75,12 @@ func (s *service) Create(ownerID string, projectID string, title string, descrip
 	}
 
 	// Check if the project exists and belongs to the owner
-	projectData, err := s.projectService.GetByID(ownerID, projectID)
-	if err != nil {
-		if errors.Is(err, project.ErrProjectNotFound) {
-			fmt.Printf("[Service Create] Project with ID %s not found for owner %s\n", projectID, ownerID)
-			return nil, ErrProjectNotFound
-		}
-
-		fmt.Printf("[Service Create] Failed to get project: %v\n", err)
+	if err := ensureProjectExists(s.projectService, ownerID, newProjectID); err != nil {
 		return nil, err
-	}
-
-	if projectData == nil {
-		fmt.Printf("[Service Create] Project with ID %s not found for owner %s\n", projectID, ownerID)
-		return nil, ErrProjectNotFound
 	}
 
 	tasks, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Create] Failed to load tasks: %v\n", err)
 		return nil, err
 	}
 
@@ -116,7 +100,6 @@ func (s *service) Create(ownerID string, projectID string, title string, descrip
 
 	err = s.storage.Save(tasks)
 	if err != nil {
-		fmt.Printf("[Service Create] Failed to save tasks: %v\n", err)
 		return nil, err
 	}
 
@@ -135,40 +118,22 @@ func (s *service) Delete(ownerID string, projectID string, taskID string) error 
 		return ErrInvalidTaskID
 	}
 
-	projectData, err := s.projectService.GetByID(ownerID, projectID)
-	if err != nil {
-		if errors.Is(err, project.ErrProjectNotFound) {
-			fmt.Printf("[Service Delete] Project with ID %s not found for owner %s\n", projectID, ownerID)
-			return ErrProjectNotFound
-		}
-		fmt.Printf("[Service Delete] Failed to get project: %v\n", err)
+	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
 		return err
-	}
-
-	if projectData == nil {
-		fmt.Printf("[Service Delete] Project with ID %s not found for owner %s\n", projectID, ownerID)
-		return ErrProjectNotFound
 	}
 
 	tasks, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Delete] Failed to load tasks: %v\n", err)
 		return err
 	}
 
 	for i, t := range tasks {
 		if t.ID == taskID && t.ProjectID == projectID {
 			tasks = append(tasks[:i], tasks[i+1:]...)
-			err = s.storage.Save(tasks)
-			if err != nil {
-				fmt.Printf("[Service Delete] Failed to save tasks: %v\n", err)
-				return err
-			}
-			return nil
+			return s.storage.Save(tasks)
 		}
 	}
 
-	fmt.Printf("[Service Delete] Task with ID %s not found for project %s\n", taskID, projectID)
 	return ErrTaskNotFound
 }
 
@@ -184,24 +149,12 @@ func (s *service) GetByID(ownerID string, projectID string, taskID string) (*Tas
 		return nil, ErrInvalidTaskID
 	}
 
-	projectData, err := s.projectService.GetByID(ownerID, projectID)
-	if err != nil {
-		if errors.Is(err, project.ErrProjectNotFound) {
-			fmt.Printf("[Service GetByID] Project with ID %s not found for owner %s\n", projectID, ownerID)
-			return nil, ErrProjectNotFound
-		}
-		fmt.Printf("[Service GetByID] Failed to get project: %v\n", err)
+	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
 		return nil, err
-	}
-
-	if projectData == nil {
-		fmt.Printf("[Service GetByID] Project with ID %s not found for owner %s\n", projectID, ownerID)
-		return nil, ErrProjectNotFound
 	}
 
 	tasks, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service GetByID] Failed to load tasks: %v\n", err)
 		return nil, err
 	}
 
@@ -211,7 +164,6 @@ func (s *service) GetByID(ownerID string, projectID string, taskID string) (*Tas
 		}
 	}
 
-	fmt.Printf("[Service GetByID] Task with ID %s not found for project %s\n", taskID, projectID)
 	return nil, ErrTaskNotFound
 }
 
@@ -224,19 +176,8 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 		return nil, ErrInvalidProjectID
 	}
 
-	projectData, err := s.projectService.GetByID(ownerID, projectID)
-	if err != nil {
-		if errors.Is(err, project.ErrProjectNotFound) {
-			fmt.Printf("[Service List] Project with ID %s not found for owner %s\n", projectID, ownerID)
-			return nil, ErrProjectNotFound
-		}
-		fmt.Printf("[Service List] Failed to get project: %v\n", err)
+	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
 		return nil, err
-	}
-
-	if projectData == nil {
-		fmt.Printf("[Service List] Project with ID %s not found for owner %s\n", projectID, ownerID)
-		return nil, ErrProjectNotFound
 	}
 
 	filtered := make([]Task, 0)
@@ -263,7 +204,6 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 
 	if query.Status != "" {
 		if !isValidStatus(query.Status) {
-			fmt.Printf("[Service List] Invalid status filter: %s\n", query.Status)
 			return nil, ErrInvalidTaskStatus
 		}
 
@@ -276,21 +216,18 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 
 	if query.Sort != "" {
 		if !isValidSort(query.Sort) {
-			fmt.Printf("[Service List] Invalid sort field: %s\n", query.Sort)
 			return nil, ErrInvalidSortField
 		}
 	}
 
 	if query.Order != "" {
 		if !isValidOrder(query.Order) {
-			fmt.Printf("[Service List] Invalid order: %s\n", query.Order)
 			return nil, ErrInvalidOrder
 		}
 	}
 
 	tasks, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service List] Failed to load tasks: %v\n", err)
 		return nil, err
 	}
 
@@ -355,7 +292,6 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 			})
 		}
 	default:
-		fmt.Printf("[Service List] Invalid sort field: %s\n", sortBy)
 		return nil, ErrInvalidSortField
 	}
 
@@ -413,24 +349,12 @@ func (s *service) Update(ownerID string, projectID string, taskID string, title 
 		return nil, ErrInvalidTaskTitle
 	}
 
-	projectData, err := s.projectService.GetByID(ownerID, projectID)
-	if err != nil {
-		if errors.Is(err, project.ErrProjectNotFound) {
-			fmt.Printf("[Service Update] Project with ID %s not found for owner %s\n", projectID, ownerID)
-			return nil, ErrProjectNotFound
-		}
-		fmt.Printf("[Service Update] Failed to get project: %v\n", err)
+	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
 		return nil, err
-	}
-
-	if projectData == nil {
-		fmt.Printf("[Service Update] Project with ID %s not found for owner %s\n", projectID, ownerID)
-		return nil, ErrProjectNotFound
 	}
 
 	tasks, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Update] Failed to load tasks: %v\n", err)
 		return nil, err
 	}
 
@@ -441,9 +365,7 @@ func (s *service) Update(ownerID string, projectID string, taskID string, title 
 			t.UpdatedAt = time.Now()
 			tasks[i] = t
 
-			err = s.storage.Save(tasks)
-			if err != nil {
-				fmt.Printf("[Service Update] Failed to save tasks: %v\n", err)
+			if err := s.storage.Save(tasks); err != nil {
 				return nil, err
 			}
 
@@ -451,7 +373,6 @@ func (s *service) Update(ownerID string, projectID string, taskID string, title 
 		}
 	}
 
-	fmt.Printf("[Service Update] Task with ID %s not found for project %s\n", taskID, projectID)
 	return nil, ErrTaskNotFound
 }
 
@@ -467,36 +388,22 @@ func (s *service) UpdateStatus(ownerID string, projectID string, taskID string, 
 		return nil, ErrInvalidTaskID
 	}
 
-	projectData, err := s.projectService.GetByID(ownerID, projectID)
-	if err != nil {
-		if errors.Is(err, project.ErrProjectNotFound) {
-			fmt.Printf("[Service UpdateStatus] Project with ID %s not found for owner %s\n", projectID, ownerID)
-			return nil, ErrProjectNotFound
-		}
-		fmt.Printf("[Service UpdateStatus] Failed to get project: %v\n", err)
+	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
 		return nil, err
-	}
-
-	if projectData == nil {
-		fmt.Printf("[Service UpdateStatus] Project with ID %s not found for owner %s\n", projectID, ownerID)
-		return nil, ErrProjectNotFound
 	}
 
 	tasks, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service UpdateStatus] Failed to load tasks: %v\n", err)
 		return nil, err
 	}
 
 	if !isValidStatus(status) {
-		fmt.Printf("[Service UpdateStatus] Invalid status: %s\n", status)
 		return nil, ErrInvalidTaskStatus
 	}
 
 	for i, t := range tasks {
 		if t.ID == taskID && t.ProjectID == projectID {
 			if !isValidTransition(t.Status, status) {
-				fmt.Printf("[Service UpdateStatus] Invalid status transition from %s to %s\n", t.Status, status)
 				return nil, ErrInvalidTaskStatusTransition
 			}
 
@@ -504,9 +411,7 @@ func (s *service) UpdateStatus(ownerID string, projectID string, taskID string, 
 			t.UpdatedAt = time.Now()
 			tasks[i] = t
 
-			err = s.storage.Save(tasks)
-			if err != nil {
-				fmt.Printf("[Service UpdateStatus] Failed to save tasks: %v\n", err)
+			if err := s.storage.Save(tasks); err != nil {
 				return nil, err
 			}
 
@@ -514,7 +419,6 @@ func (s *service) UpdateStatus(ownerID string, projectID string, taskID string, 
 		}
 	}
 
-	fmt.Printf("[Service UpdateStatus] Task with ID %s not found for project %s\n", taskID, projectID)
 	return nil, ErrTaskNotFound
 }
 
@@ -566,4 +470,24 @@ func isValidOrder(order Order) bool {
 	default:
 		return false
 	}
+}
+
+// ensureProjectExists translates a project-lookup failure into task's own
+// ErrProjectNotFound. It fully owns that translation, so callers just need
+// to check err != nil — they should not re-inspect the error afterwards.
+func ensureProjectExists(projectService ProjectService, ownerID, projectID string) error {
+	projectData, err := projectService.GetByID(ownerID, projectID)
+	if err != nil {
+		if errors.Is(err, project.ErrProjectNotFound) {
+			return ErrProjectNotFound
+		}
+
+		return err
+	}
+
+	if projectData == nil {
+		return ErrProjectNotFound
+	}
+
+	return nil
 }

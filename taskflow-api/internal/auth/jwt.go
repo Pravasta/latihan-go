@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type JWTService struct {
@@ -30,24 +30,23 @@ func (s *JWTService) Generate(userID string) (string, error) {
 func (s *JWTService) Parse(token string) (string, error) {
 	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
+			return nil, jwt.ErrTokenSignatureInvalid
 		}
 		return s.secret, nil
 	})
-
 	if err != nil {
-		fmt.Printf("[JWT] Failed to parse token: %v\n", err)
 		return "", err
 	}
 
-	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok && parsedToken.Valid {
-		userID, ok := claims["user_id"].(string)
-		if !ok {
-			fmt.Printf("[JWT] Invalid user_id claim\n")
-			return "", jwt.ErrInvalidKey
-		}
-		return userID, nil
+	claims, ok := parsedToken.Claims.(jwt.MapClaims)
+	if !ok || !parsedToken.Valid {
+		return "", jwt.ErrTokenInvalidClaims
 	}
 
-	return "", jwt.ErrInvalidKey
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return "", fmt.Errorf("%w: user_id claim missing or not a string", jwt.ErrTokenInvalidClaims)
+	}
+
+	return userID, nil
 }

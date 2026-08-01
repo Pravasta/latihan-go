@@ -2,6 +2,7 @@ package task
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"taskflow-api/internal/common"
@@ -13,6 +14,42 @@ type Handler struct {
 
 func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
+}
+
+// errStatusCode maps a known service error to the HTTP status it should
+// produce. Any error not listed here is treated as unexpected and becomes a
+// 500, logged with the real cause instead of exposed to the client.
+var errStatusCode = map[error]int{
+	ErrInvalidOwnerID:              http.StatusBadRequest,
+	ErrInvalidProjectID:            http.StatusBadRequest,
+	ErrInvalidTaskID:               http.StatusBadRequest,
+	ErrInvalidTaskTitle:            http.StatusBadRequest,
+	ErrInvalidTaskStatus:           http.StatusBadRequest,
+	ErrInvalidTaskStatusTransition: http.StatusBadRequest,
+	ErrInvalidSortField:            http.StatusBadRequest,
+	ErrInvalidOrder:                http.StatusBadRequest,
+	ErrInvalidPageNumber:           http.StatusBadRequest,
+	ErrInvalidLimitNumber:          http.StatusBadRequest,
+	ErrProjectNotFound:             http.StatusNotFound,
+	ErrTaskNotFound:                http.StatusNotFound,
+}
+
+func writeServiceError(w http.ResponseWriter, err error) {
+	if status, ok := errStatusCode[err]; ok {
+		common.WriteError(w, status, err.Error())
+		return
+	}
+	slog.Error("unhandled task service error", "error", err)
+	common.WriteError(w, http.StatusInternalServerError, "Internal server error")
+}
+
+func requireOwnerID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	ownerID, ok := common.GetUserID(r.Context())
+	if !ok {
+		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return "", false
+	}
+	return ownerID, true
 }
 
 func (h *Handler) CreateTask(
@@ -29,25 +66,14 @@ func (h *Handler) CreateTask(
 		return
 	}
 
-	ownerID, ok := common.GetUserID(r.Context())
+	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
-		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	task, err := h.service.Create(ownerID, projectIdStr, req.Title, req.Description)
 	if err != nil {
-		switch err {
-		case ErrInvalidOwnerID, ErrInvalidProjectID, ErrInvalidTaskTitle:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		case ErrProjectNotFound:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
-		default:
-			defaultRes.Message = "Internal server error"
-			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
-		}
+		writeServiceError(w, err)
 		return
 	}
 
@@ -75,25 +101,13 @@ func (h *Handler) DeleteTask(
 	var projectID = r.PathValue("projectID")
 	var taskID = r.PathValue("taskID")
 
-	ownerID, ok := common.GetUserID(r.Context())
+	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
-		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
-	err := h.service.Delete(ownerID, projectID, taskID)
-	if err != nil {
-		switch err {
-		case ErrInvalidOwnerID, ErrInvalidProjectID, ErrInvalidTaskID:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		case ErrProjectNotFound, ErrTaskNotFound:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
-		default:
-			defaultRes.Message = "Internal server error"
-			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
-		}
+	if err := h.service.Delete(ownerID, projectID, taskID); err != nil {
+		writeServiceError(w, err)
 		return
 	}
 
@@ -111,25 +125,14 @@ func (h *Handler) GetByID(
 		projectID  = r.PathValue("projectID")
 	)
 
-	ownerID, ok := common.GetUserID(r.Context())
+	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
-		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	task, err := h.service.GetByID(ownerID, projectID, taskID)
 	if err != nil {
-		switch err {
-		case ErrInvalidOwnerID, ErrInvalidProjectID, ErrInvalidTaskID:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		case ErrProjectNotFound, ErrTaskNotFound:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
-		default:
-			defaultRes.Message = "Internal server error"
-			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
-		}
+		writeServiceError(w, err)
 		return
 	}
 
@@ -191,28 +194,14 @@ func (h *Handler) ListTasks(
 		taskQuery.Order = Order(order)
 	}
 
-	ownerID, ok := common.GetUserID(r.Context())
+	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
-		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	tasks, err := h.service.List(ownerID, projectID, taskQuery)
 	if err != nil {
-		switch err {
-		case ErrInvalidOwnerID, ErrInvalidProjectID:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		case ErrProjectNotFound:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
-		case ErrInvalidPageNumber, ErrInvalidLimitNumber, ErrInvalidTaskStatus, ErrInvalidSortField, ErrInvalidOrder:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		default:
-			defaultRes.Message = "Internal server error"
-			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
-		}
+		writeServiceError(w, err)
 		return
 	}
 
@@ -239,25 +228,14 @@ func (h *Handler) UpdateTask(
 		return
 	}
 
-	ownerID, ok := common.GetUserID(r.Context())
+	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
-		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	task, err := h.service.Update(ownerID, projectID, taskID, req.Title, req.Description)
 	if err != nil {
-		switch err {
-		case ErrInvalidOwnerID, ErrInvalidProjectID, ErrInvalidTaskID:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		case ErrProjectNotFound, ErrTaskNotFound:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
-		default:
-			defaultRes.Message = "Internal server error"
-			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
-		}
+		writeServiceError(w, err)
 		return
 	}
 
@@ -294,25 +272,14 @@ func (h *Handler) UpdateTaskStatus(
 		return
 	}
 
-	ownerID, ok := common.GetUserID(r.Context())
+	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
-		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	task, err := h.service.UpdateStatus(ownerID, projectID, taskID, req.Status)
 	if err != nil {
-		switch err {
-		case ErrInvalidOwnerID, ErrInvalidProjectID, ErrInvalidTaskID:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusBadRequest, defaultRes.Message)
-		case ErrProjectNotFound, ErrTaskNotFound, ErrInvalidTaskStatus, ErrInvalidTaskStatusTransition:
-			defaultRes.Message = err.Error()
-			common.WriteError(w, http.StatusNotFound, defaultRes.Message)
-		default:
-			defaultRes.Message = "Internal server error"
-			common.WriteError(w, http.StatusInternalServerError, defaultRes.Message)
-		}
+		writeServiceError(w, err)
 		return
 	}
 
