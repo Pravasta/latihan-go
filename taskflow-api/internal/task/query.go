@@ -15,8 +15,3 @@ type TaskQuery struct {
 	Sort   string
 	Order  Order
 }
-
-// string order to Order type
-func (o Order) String() string {
-	return string(o)
-}

@@ -2,7 +2,7 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"taskflow-api/internal/common"
 )
@@ -13,6 +13,27 @@ type Handler struct {
 
 func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
+}
+
+// errStatusCode maps a known service error to the HTTP status it should
+// produce. Any error not listed here is treated as unexpected and becomes a
+// 500, logged with the real cause instead of exposed to the client.
+var errStatusCode = map[error]int{
+	ErrInvalidName:        http.StatusBadRequest,
+	ErrInvalidEmail:       http.StatusBadRequest,
+	ErrInvalidPassword:    http.StatusBadRequest,
+	ErrInvalidCredentials: http.StatusUnauthorized,
+	ErrEmailAlreadyExists: http.StatusConflict,
+	ErrUserNotFound:       http.StatusNotFound,
+}
+
+func writeServiceError(w http.ResponseWriter, err error) {
+	if status, ok := errStatusCode[err]; ok {
+		common.WriteError(w, status, err.Error())
+		return
+	}
+	slog.Error("unhandled auth service error", "error", err)
+	common.WriteError(w, http.StatusInternalServerError, "Internal server error")
 }
 
 type createUserRequest struct {
@@ -40,18 +61,7 @@ func (h *Handler) Register(
 
 	user, err := h.service.CreateUser(req.Name, req.Email, req.Password)
 	if err != nil {
-		switch err {
-		case ErrInvalidName:
-			common.WriteError(w, http.StatusBadRequest, err.Error())
-		case ErrInvalidEmail:
-			common.WriteError(w, http.StatusBadRequest, err.Error())
-		case ErrInvalidPassword:
-			common.WriteError(w, http.StatusBadRequest, err.Error())
-		case ErrEmailAlreadyExists:
-			common.WriteError(w, http.StatusConflict, err.Error())
-		default:
-			common.WriteError(w, http.StatusInternalServerError, "Internal server error")
-		}
+		writeServiceError(w, err)
 		return
 	}
 
@@ -92,16 +102,7 @@ func (h *Handler) Login(
 
 	token, err := h.service.Authenticate(req.Email, req.Password)
 	if err != nil {
-		switch err {
-		case ErrInvalidEmail:
-			common.WriteError(w, http.StatusBadRequest, err.Error())
-		case ErrInvalidPassword:
-			common.WriteError(w, http.StatusUnauthorized, err.Error())
-		case ErrUserNotFound:
-			common.WriteError(w, http.StatusNotFound, err.Error())
-		default:
-			common.WriteError(w, http.StatusInternalServerError, "Internal server error")
-		}
+		writeServiceError(w, err)
 		return
 	}
 
@@ -120,23 +121,15 @@ func (h *Handler) Me(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	// read from jwt middleware context
 	userID, ok := common.GetUserID(r.Context())
-	fmt.Println("[Handler] User ID from context:", userID)
 	if !ok {
-		fmt.Println("[Handler] User ID is missing")
 		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	user, err := h.service.Me(userID)
 	if err != nil {
-		switch err {
-		case ErrUserNotFound:
-			common.WriteError(w, http.StatusNotFound, err.Error())
-		default:
-			common.WriteError(w, http.StatusInternalServerError, "Internal server error")
-		}
+		writeServiceError(w, err)
 		return
 	}
 

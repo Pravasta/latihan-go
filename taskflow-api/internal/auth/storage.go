@@ -2,7 +2,9 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -18,33 +20,33 @@ type storage struct {
 // Load implements Storage.
 func (s *storage) Load() ([]User, error) {
 	file, err := os.Open(s.path)
-	if err != nil {
-		fmt.Printf(("[Storage] Failed to open file: %v\n"), err)
-		return nil, err
+	if errors.Is(err, os.ErrNotExist) {
+		return []User{}, nil
 	}
-
+	if err != nil {
+		return nil, fmt.Errorf("open auth storage: %w", err)
+	}
 	defer file.Close()
 
 	var users []User
 	if err := json.NewDecoder(file).Decode(&users); err != nil {
-		fmt.Printf(("[Storage] Failed to decode users: %v\n"), err)
-		return nil, err
+		if errors.Is(err, io.EOF) {
+			return []User{}, nil
+		}
+		return nil, fmt.Errorf("decode auth storage: %w", err)
 	}
 	return users, nil
 }
 
 // Save implements Storage.
 func (s *storage) Save(users []User) error {
-	user, err := json.MarshalIndent(users, "", "  ")
+	data, err := json.MarshalIndent(users, "", "  ")
 	if err != nil {
-		fmt.Printf(("[Storage] Failed to marshal users: %v\n"), err)
-		return err
+		return fmt.Errorf("marshal users: %w", err)
 	}
 
-	err = os.WriteFile(s.path, user, 0644)
-	if err != nil {
-		fmt.Printf(("[Storage] Failed to write to file: %v\n"), err)
-		return err
+	if err := os.WriteFile(s.path, data, 0644); err != nil {
+		return fmt.Errorf("write auth storage: %w", err)
 	}
 
 	return nil

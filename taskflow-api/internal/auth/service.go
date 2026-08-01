@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"strings"
 	"taskflow-api/internal/common"
 	"time"
@@ -23,20 +22,17 @@ type service struct {
 // Authenticate implements Service.
 func (s *service) Authenticate(email string, password string) (string, error) {
 	email = strings.TrimSpace(email)
-	if common.IsValidEmail(email) == false {
-		fmt.Println("[Service Authenticate] Invalid email format")
+	if !common.IsValidEmail(email) {
 		return "", ErrInvalidEmail
 	}
 
 	password = strings.TrimSpace(password)
-	if common.IsValidPassword(password) == false {
-		fmt.Println("[Service Authenticate] Invalid password format")
+	if !common.IsValidPassword(password) {
 		return "", ErrInvalidPassword
 	}
 
 	users, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Authenticate] Failed to load users: %v\n", err)
 		return "", err
 	}
 
@@ -49,18 +45,15 @@ func (s *service) Authenticate(email string, password string) (string, error) {
 	}
 
 	if foundUser == nil {
-		fmt.Println("[Service Authenticate] User not found")
 		return "", ErrUserNotFound
 	}
 
 	if !CheckPasswordHash(password, foundUser.PasswordHash) {
-		fmt.Println("[Service Authenticate] Invalid password")
-		return "", ErrInvalidPassword
+		return "", ErrInvalidCredentials
 	}
 
 	token, err := s.jwt.Generate(foundUser.ID)
 	if err != nil {
-		fmt.Printf("[Service Authenticate] Failed to generate token: %v\n", err)
 		return "", err
 	}
 
@@ -72,38 +65,32 @@ func (s *service) CreateUser(name string, email string, password string) (*User,
 
 	name = strings.TrimSpace(name)
 	if name == "" {
-		fmt.Println("[Service CreateUser] Name cannot be empty")
 		return nil, ErrInvalidName
 	}
 
 	email = strings.TrimSpace(email)
-	if common.IsValidEmail(email) == false {
-		fmt.Println("[Service CreateUser] Invalid email format")
+	if !common.IsValidEmail(email) {
 		return nil, ErrInvalidEmail
 	}
 
 	password = strings.TrimSpace(password)
-	if common.IsValidPassword(password) == false {
-		fmt.Println("[Service CreateUser] Invalid password format")
+	if !common.IsValidPassword(password) {
 		return nil, ErrInvalidPassword
 	}
 
 	users, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service CreateUser] Failed to load users: %v\n", err)
 		return nil, err
 	}
 
 	for _, u := range users {
 		if u.Email == email {
-			fmt.Println("[Service CreateUser] Email already exists")
 			return nil, ErrEmailAlreadyExists
 		}
 	}
 
 	hashedPassword, err := HashPassword(password)
 	if err != nil {
-		fmt.Printf("[Service CreateUser] Failed to hash password: %v\n", err)
 		return nil, err
 	}
 
@@ -118,7 +105,6 @@ func (s *service) CreateUser(name string, email string, password string) (*User,
 	users = append(users, *user)
 
 	if err := s.storage.Save(users); err != nil {
-		fmt.Printf("[Service CreateUser] Failed to save users: %v\n", err)
 		return nil, err
 	}
 
@@ -128,13 +114,11 @@ func (s *service) CreateUser(name string, email string, password string) (*User,
 // Me implements Service.
 func (s *service) Me(userID string) (*User, error) {
 	if userID == "" {
-		fmt.Println("[Service Me] User ID cannot be empty")
 		return nil, ErrUserNotFound
 	}
 
 	users, err := s.storage.Load()
 	if err != nil {
-		fmt.Printf("[Service Me] Failed to load users: %v\n", err)
 		return nil, err
 	}
 
@@ -144,7 +128,6 @@ func (s *service) Me(userID string) (*User, error) {
 		}
 	}
 
-	fmt.Println("[Service Me] User not found")
 	return nil, ErrUserNotFound
 }
 

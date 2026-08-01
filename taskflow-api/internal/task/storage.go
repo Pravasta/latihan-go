@@ -2,7 +2,9 @@ package task
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -18,16 +20,21 @@ type storage struct {
 // Load implements Storage.
 func (s *storage) Load() ([]Task, error) {
 	file, err := os.Open(s.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return []Task{}, nil
+	}
+
 	if err != nil {
-		fmt.Printf("[Storage] Failed to open file: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("open task storage: %w", err)
 	}
 	defer file.Close()
 
 	var tasks []Task
 	if err := json.NewDecoder(file).Decode(&tasks); err != nil {
-		fmt.Printf("[Storage] Failed to decode tasks: %v\n", err)
-		return nil, err
+		if errors.Is(err, io.EOF) {
+			return []Task{}, nil
+		}
+		return nil, fmt.Errorf("decode task storage: %w", err)
 	}
 	return tasks, nil
 }
@@ -36,14 +43,11 @@ func (s *storage) Load() ([]Task, error) {
 func (s *storage) Save(tasks []Task) error {
 	taskData, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
-		fmt.Printf("[Storage] Failed to marshal tasks: %v\n", err)
-		return err
+		return fmt.Errorf("marshal tasks: %w", err)
 	}
 
-	err = os.WriteFile(s.path, taskData, 0644)
-	if err != nil {
-		fmt.Printf("[Storage] Failed to write to file: %v\n", err)
-		return err
+	if err := os.WriteFile(s.path, taskData, 0644); err != nil {
+		return fmt.Errorf("write task storage: %w", err)
 	}
 
 	return nil
