@@ -9,3 +9,8 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+
+// Table Name
+func (User) TableName() string {
+	return "users"
+}

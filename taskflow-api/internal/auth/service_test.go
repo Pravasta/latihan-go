@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -13,6 +14,8 @@ func testJWT() *JWTService {
 }
 
 func TestService_CreateUser(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("validation", func(t *testing.T) {
 		cases := []struct {
 			name     string
@@ -29,9 +32,9 @@ func TestService_CreateUser(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				svc := NewService(&fakeStorage{}, testJWT())
+				svc := NewService(&fakeRepository{}, testJWT())
 
-				_, err := svc.CreateUser(tc.userName, tc.email, tc.password)
+				_, err := svc.CreateUser(ctx, tc.userName, tc.email, tc.password)
 				if !errors.Is(err, tc.wantErr) {
 					t.Fatalf("got error %v, want %v", err, tc.wantErr)
 				}
@@ -40,10 +43,10 @@ func TestService_CreateUser(t *testing.T) {
 	})
 
 	t.Run("success persists a new user with a hashed password", func(t *testing.T) {
-		storage := &fakeStorage{}
-		svc := NewService(storage, testJWT())
+		repo := &fakeRepository{}
+		svc := NewService(repo, testJWT())
 
-		got, err := svc.CreateUser("Alice", "alice@example.com", validPassword)
+		got, err := svc.CreateUser(ctx, "Alice", "alice@example.com", validPassword)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -56,16 +59,16 @@ func TestService_CreateUser(t *testing.T) {
 		if !CheckPasswordHash(validPassword, got.PasswordHash) {
 			t.Fatal("stored hash does not match the original password")
 		}
-		if len(storage.users) != 1 {
-			t.Fatalf("expected 1 user persisted, got %d", len(storage.users))
+		if len(repo.users) != 1 {
+			t.Fatalf("expected 1 user persisted, got %d", len(repo.users))
 		}
 	})
 
 	t.Run("email already exists", func(t *testing.T) {
 		existing := User{ID: "u1", Email: "alice@example.com"}
-		svc := NewService(&fakeStorage{users: []User{existing}}, testJWT())
+		svc := NewService(&fakeRepository{users: []User{existing}}, testJWT())
 
-		_, err := svc.CreateUser("Alice", "alice@example.com", validPassword)
+		_, err := svc.CreateUser(ctx, "Alice", "alice@example.com", validPassword)
 		if !errors.Is(err, ErrEmailAlreadyExists) {
 			t.Fatalf("got error %v, want %v", err, ErrEmailAlreadyExists)
 		}
@@ -75,31 +78,25 @@ func TestService_CreateUser(t *testing.T) {
 		// bcrypt rejects inputs over 72 bytes; this still satisfies
 		// IsValidPassword's complexity regex, so it reaches HashPassword.
 		tooLong := strings.Repeat("Aa1!", 20)
-		svc := NewService(&fakeStorage{}, testJWT())
+		svc := NewService(&fakeRepository{}, testJWT())
 
-		if _, err := svc.CreateUser("Alice", "alice@example.com", tooLong); err == nil {
+		if _, err := svc.CreateUser(ctx, "Alice", "alice@example.com", tooLong); err == nil {
 			t.Fatal("expected an error for an over-length password, got nil")
 		}
 	})
 
-	t.Run("load failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeStorage{loadErr: errors.New("disk error")}, testJWT())
+	t.Run("create failure is returned to the caller", func(t *testing.T) {
+		svc := NewService(&fakeRepository{createErr: errors.New("connection refused")}, testJWT())
 
-		if _, err := svc.CreateUser("Alice", "alice@example.com", validPassword); err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
-
-	t.Run("save failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeStorage{saveErr: errors.New("disk full")}, testJWT())
-
-		if _, err := svc.CreateUser("Alice", "alice@example.com", validPassword); err == nil {
+		if _, err := svc.CreateUser(ctx, "Alice", "alice@example.com", validPassword); err == nil {
 			t.Fatal("expected error, got nil")
 		}
 	})
 }
 
 func TestService_Authenticate(t *testing.T) {
+	ctx := context.Background()
+
 	hash, err := HashPassword(validPassword)
 	if err != nil {
 		t.Fatalf("failed to prepare test fixture: %v", err)
@@ -119,9 +116,9 @@ func TestService_Authenticate(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				svc := NewService(&fakeStorage{users: []User{existing}}, testJWT())
+				svc := NewService(&fakeRepository{users: []User{existing}}, testJWT())
 
-				_, err := svc.Authenticate(tc.email, tc.password)
+				_, err := svc.Authenticate(ctx, tc.email, tc.password)
 				if !errors.Is(err, tc.wantErr) {
 					t.Fatalf("got error %v, want %v", err, tc.wantErr)
 				}
@@ -130,18 +127,18 @@ func TestService_Authenticate(t *testing.T) {
 	})
 
 	t.Run("user not found", func(t *testing.T) {
-		svc := NewService(&fakeStorage{users: []User{existing}}, testJWT())
+		svc := NewService(&fakeRepository{users: []User{existing}}, testJWT())
 
-		_, err := svc.Authenticate("nobody@example.com", validPassword)
+		_, err := svc.Authenticate(ctx, "nobody@example.com", validPassword)
 		if !errors.Is(err, ErrUserNotFound) {
 			t.Fatalf("got error %v, want %v", err, ErrUserNotFound)
 		}
 	})
 
 	t.Run("wrong password returns invalid credentials, not invalid password format", func(t *testing.T) {
-		svc := NewService(&fakeStorage{users: []User{existing}}, testJWT())
+		svc := NewService(&fakeRepository{users: []User{existing}}, testJWT())
 
-		_, err := svc.Authenticate("alice@example.com", "WrongPass1!")
+		_, err := svc.Authenticate(ctx, "alice@example.com", "WrongPass1!")
 		if !errors.Is(err, ErrInvalidCredentials) {
 			t.Fatalf("got error %v, want %v", err, ErrInvalidCredentials)
 		}
@@ -149,9 +146,9 @@ func TestService_Authenticate(t *testing.T) {
 
 	t.Run("success returns a token containing the user id", func(t *testing.T) {
 		jwtSvc := testJWT()
-		svc := NewService(&fakeStorage{users: []User{existing}}, jwtSvc)
+		svc := NewService(&fakeRepository{users: []User{existing}}, jwtSvc)
 
-		token, err := svc.Authenticate("alice@example.com", validPassword)
+		token, err := svc.Authenticate(ctx, "alice@example.com", validPassword)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -165,31 +162,32 @@ func TestService_Authenticate(t *testing.T) {
 		}
 	})
 
-	t.Run("load failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeStorage{loadErr: errors.New("disk error")}, testJWT())
+	t.Run("lookup failure is returned to the caller", func(t *testing.T) {
+		svc := NewService(&fakeRepository{findErr: errors.New("connection refused")}, testJWT())
 
-		if _, err := svc.Authenticate("alice@example.com", validPassword); err == nil {
+		if _, err := svc.Authenticate(ctx, "alice@example.com", validPassword); err == nil {
 			t.Fatal("expected error, got nil")
 		}
 	})
 }
 
 func TestService_Me(t *testing.T) {
+	ctx := context.Background()
 	existing := User{ID: "u1", Email: "alice@example.com"}
 
 	t.Run("missing user id", func(t *testing.T) {
-		svc := NewService(&fakeStorage{}, testJWT())
+		svc := NewService(&fakeRepository{}, testJWT())
 
-		_, err := svc.Me("")
+		_, err := svc.Me(ctx, "")
 		if !errors.Is(err, ErrUserNotFound) {
 			t.Fatalf("got error %v, want %v", err, ErrUserNotFound)
 		}
 	})
 
 	t.Run("found", func(t *testing.T) {
-		svc := NewService(&fakeStorage{users: []User{existing}}, testJWT())
+		svc := NewService(&fakeRepository{users: []User{existing}}, testJWT())
 
-		got, err := svc.Me("u1")
+		got, err := svc.Me(ctx, "u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -199,18 +197,18 @@ func TestService_Me(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		svc := NewService(&fakeStorage{users: []User{existing}}, testJWT())
+		svc := NewService(&fakeRepository{users: []User{existing}}, testJWT())
 
-		_, err := svc.Me("does-not-exist")
+		_, err := svc.Me(ctx, "does-not-exist")
 		if !errors.Is(err, ErrUserNotFound) {
 			t.Fatalf("got error %v, want %v", err, ErrUserNotFound)
 		}
 	})
 
-	t.Run("load failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeStorage{loadErr: errors.New("disk error")}, testJWT())
+	t.Run("lookup failure is returned to the caller", func(t *testing.T) {
+		svc := NewService(&fakeRepository{findErr: errors.New("connection refused")}, testJWT())
 
-		if _, err := svc.Me("u1"); err == nil {
+		if _, err := svc.Me(ctx, "u1"); err == nil {
 			t.Fatal("expected error, got nil")
 		}
 	})

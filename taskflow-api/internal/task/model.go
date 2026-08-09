@@ -20,6 +20,11 @@ type Task struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+// TableName
+func (Task) TableName() string {
+	return "tasks"
+}
+
 type TaskListResult struct {
 	Tasks          []Task         `json:"tasks"`
 	PaginationMeta PaginationMeta `json:"meta"`

@@ -60,6 +60,7 @@ func (h *Handler) CreateTask(
 	var res CreateTaskResponse
 	var defaultRes DefaultResponse
 	projectIdStr := r.PathValue("projectID")
+	ctx := r.Context()
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		common.WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -71,7 +72,7 @@ func (h *Handler) CreateTask(
 		return
 	}
 
-	task, err := h.service.Create(ownerID, projectIdStr, req.Title, req.Description)
+	task, err := h.service.Create(ctx, ownerID, projectIdStr, req.Title, req.Description)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -100,13 +101,14 @@ func (h *Handler) DeleteTask(
 	var defaultRes DefaultResponse
 	var projectID = r.PathValue("projectID")
 	var taskID = r.PathValue("taskID")
+	ctx := r.Context()
 
 	ownerID, ok := requireOwnerID(w, r)
 	if !ok {
 		return
 	}
 
-	if err := h.service.Delete(ownerID, projectID, taskID); err != nil {
+	if err := h.service.Delete(ctx, ownerID, projectID, taskID); err != nil {
 		writeServiceError(w, err)
 		return
 	}
@@ -123,6 +125,7 @@ func (h *Handler) GetByID(
 		defaultRes DefaultResponse
 		taskID     = r.PathValue("taskID")
 		projectID  = r.PathValue("projectID")
+		ctx        = r.Context()
 	)
 
 	ownerID, ok := requireOwnerID(w, r)
@@ -130,7 +133,7 @@ func (h *Handler) GetByID(
 		return
 	}
 
-	task, err := h.service.GetByID(ownerID, projectID, taskID)
+	task, err := h.service.GetByID(ctx, ownerID, projectID, taskID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -158,6 +161,7 @@ func (h *Handler) ListTasks(
 		sort   = r.URL.Query().Get("sort")
 		order  = r.URL.Query().Get("order")
 		status = r.URL.Query().Get("status")
+		ctx    = r.Context()
 	)
 
 	if limitStr != "" {
@@ -199,7 +203,7 @@ func (h *Handler) ListTasks(
 		return
 	}
 
-	tasks, err := h.service.List(ownerID, projectID, taskQuery)
+	tasks, err := h.service.List(ctx, ownerID, projectID, taskQuery)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -221,6 +225,7 @@ func (h *Handler) UpdateTask(
 		defaultRes DefaultResponse
 		projectID  = r.PathValue("projectID")
 		taskID     = r.PathValue("taskID")
+		ctx        = r.Context()
 	)
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -233,7 +238,7 @@ func (h *Handler) UpdateTask(
 		return
 	}
 
-	task, err := h.service.Update(ownerID, projectID, taskID, req.Title, req.Description)
+	task, err := h.service.Update(ctx, ownerID, projectID, taskID, req.Title, req.Description)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -265,6 +270,7 @@ func (h *Handler) UpdateTaskStatus(
 		defaultRes DefaultResponse
 		projectID  = r.PathValue("projectID")
 		taskID     = r.PathValue("taskID")
+		ctx        = r.Context()
 	)
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -277,7 +283,7 @@ func (h *Handler) UpdateTaskStatus(
 		return
 	}
 
-	task, err := h.service.UpdateStatus(ownerID, projectID, taskID, req.Status)
+	task, err := h.service.UpdateStatus(ctx, ownerID, projectID, taskID, req.Status)
 	if err != nil {
 		writeServiceError(w, err)
 		return

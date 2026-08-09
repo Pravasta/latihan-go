@@ -2,25 +2,48 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"taskflow-api/internal/auth"
 	"taskflow-api/internal/project"
+	"taskflow-api/internal/repository/postgres"
 	"taskflow-api/internal/task"
+
+	"github.com/joho/godotenv"
 )
 
 var secretKey = "mysecretkey"
 
 func main() {
-	storage := auth.NewStorage("data/users.json")
-	projectStorage := project.NewStorage("data/projects.json")
-	taskStorage := task.NewStorage("data/tasks.json")
+	if err := godotenv.Load(); err != nil {
+		log.Println("[Main] No .env file found, relying on environment variables")
+	}
+
+	// postgres db
+	db, err := postgres.NewDB()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// [NOW - UNUSED]
+	// storage := auth.NewStorage("data/users.json")
+	// projectStorage := project.NewStorage("data/projects.json")
+	// taskStorage := task.NewStorage("data/tasks.json")
+
+	// REPOSITORIES
+	userRepository := postgres.NewAuthRepository(db)
+	projectRepository := postgres.NewProjectRepository(db)
+	taskRepository := postgres.NewTaskRepository(db)
+
+	// SERVICES
 	jwt := auth.NewJWTService(secretKey)
-	service := auth.NewService(storage, jwt)
-	projectService := project.NewService(projectStorage)
-	taskService := task.NewService(taskStorage, projectService)
+	authService := auth.NewService(userRepository, jwt)
+	projectService := project.NewService(projectRepository)
+	taskService := task.NewService(taskRepository, projectRepository)
 	authMiddleware := auth.NewAuthMiddleware(jwt)
 
-	handler := auth.NewHandler(service)
+	handler := auth.NewHandler(authService)
 
 	mux := http.NewServeMux()
 
@@ -111,3 +134,6 @@ func main() {
 		panic(err)
 	}
 }
+
+// To Run
+// go run cmd/api/main.go

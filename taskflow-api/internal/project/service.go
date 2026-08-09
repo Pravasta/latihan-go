@@ -1,30 +1,30 @@
 package project
 
 import (
+	"context"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Service interface {
-	Create(ownerID, name, description string) (*Project, error)
-	ListByOwner(ownerID string) ([]Project, error)
-	GetByID(ownerID, projectID string) (*Project, error)
+	Create(ctx context.Context, ownerID, name, description string) (*Project, error)
+	ListByOwner(ctx context.Context, ownerID string) ([]Project, error)
+	GetByID(ctx context.Context, ownerID, projectID string) (*Project, error)
 	Update(
+		ctx context.Context,
 		ownerID,
 		projectID,
 		name,
 		description string,
 	) (*Project, error)
-	Delete(ownerID, projectID string) error
+	Delete(ctx context.Context, ownerID, projectID string) error
 }
 
 type service struct {
-	storage Storage
+	repo Repository
 }
 
 // Create implements Service.
-func (s *service) Create(ownerID string, name string, description string) (*Project, error) {
+func (s *service) Create(ctx context.Context, ownerID string, name string, description string) (*Project, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -37,15 +37,9 @@ func (s *service) Create(ownerID string, name string, description string) (*Proj
 		return nil, ErrInvalidProjectDescription
 	}
 
-	projects, err := s.storage.Load()
-	if err != nil {
-		return nil, err
-	}
-
 	timeNow := time.Now()
 
 	project := &Project{
-		ID:          uuid.NewString(),
 		OwnerID:     ownerID,
 		Name:        name,
 		Description: description,
@@ -53,18 +47,16 @@ func (s *service) Create(ownerID string, name string, description string) (*Proj
 		UpdatedAt:   timeNow,
 	}
 
-	projects = append(projects, *project)
-
-	err = s.storage.Save(projects)
+	result, err := s.repo.Create(ctx, project)
 	if err != nil {
 		return nil, err
 	}
 
-	return project, nil
+	return result, nil
 }
 
 // Delete implements Service.
-func (s *service) Delete(ownerID string, projectID string) error {
+func (s *service) Delete(ctx context.Context, ownerID string, projectID string) error {
 	if ownerID == "" {
 		return ErrInvalidOwnerID
 	}
@@ -73,23 +65,16 @@ func (s *service) Delete(ownerID string, projectID string) error {
 		return ErrInvalidProjectID
 	}
 
-	projects, err := s.storage.Load()
+	err := s.repo.Delete(ctx, ownerID, projectID)
 	if err != nil {
 		return err
 	}
 
-	for i, p := range projects {
-		if p.ID == projectID && p.OwnerID == ownerID {
-			projects = append(projects[:i], projects[i+1:]...)
-			return s.storage.Save(projects)
-		}
-	}
-
-	return ErrProjectNotFound
+	return nil
 }
 
 // GetByID implements Service.
-func (s *service) GetByID(ownerID string, projectID string) (*Project, error) {
+func (s *service) GetByID(ctx context.Context, ownerID string, projectID string) (*Project, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -98,43 +83,30 @@ func (s *service) GetByID(ownerID string, projectID string) (*Project, error) {
 		return nil, ErrInvalidProjectID
 	}
 
-	projects, err := s.storage.Load()
+	project, err := s.repo.GetByID(ctx, ownerID, projectID)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, p := range projects {
-		if p.ID == projectID && p.OwnerID == ownerID {
-			return &p, nil
-		}
-	}
-
-	return nil, ErrProjectNotFound
+	return project, nil
 }
 
 // ListByOwner implements Service.
-func (s *service) ListByOwner(ownerID string) ([]Project, error) {
+func (s *service) ListByOwner(ctx context.Context, ownerID string) ([]Project, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
 
-	projects, err := s.storage.Load()
+	projects, err := s.repo.ListByOwner(ctx, ownerID)
 	if err != nil {
 		return nil, err
 	}
 
-	var ownerProjects []Project
-	for _, p := range projects {
-		if p.OwnerID == ownerID {
-			ownerProjects = append(ownerProjects, p)
-		}
-	}
-
-	return ownerProjects, nil
+	return projects, nil
 }
 
 // Update implements Service.
-func (s *service) Update(ownerID string, projectID string, name string, description string) (*Project, error) {
+func (s *service) Update(ctx context.Context, ownerID string, projectID string, name string, description string) (*Project, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -151,28 +123,22 @@ func (s *service) Update(ownerID string, projectID string, name string, descript
 		return nil, ErrInvalidProjectDescription
 	}
 
-	projects, err := s.storage.Load()
+	project := &Project{
+		ID:          projectID,
+		OwnerID:     ownerID,
+		Name:        name,
+		Description: description,
+		UpdatedAt:   time.Now(),
+	}
+
+	result, err := s.repo.Update(ctx, project)
 	if err != nil {
 		return nil, err
 	}
 
-	for i, p := range projects {
-		if p.ID == projectID && p.OwnerID == ownerID {
-			p.Name = name
-			p.Description = description
-			p.UpdatedAt = time.Now()
-			projects[i] = p
-
-			if err := s.storage.Save(projects); err != nil {
-				return nil, err
-			}
-			return &p, nil
-		}
-	}
-
-	return nil, ErrProjectNotFound
+	return result, nil
 }
 
-func NewService(storage Storage) Service {
-	return &service{storage: storage}
+func NewService(repo Repository) Service {
+	return &service{repo: repo}
 }
