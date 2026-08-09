@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -40,7 +41,7 @@ func TestHandler_Register(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				h := NewHandler(&fakeService{
-					createUserFn: func(name, email, password string) (*User, error) {
+					createUserFn: func(ctx context.Context, name, email, password string) (*User, error) {
 						return nil, tc.err
 					},
 				})
@@ -60,7 +61,7 @@ func TestHandler_Register(t *testing.T) {
 	t.Run("success returns 201 with the created user", func(t *testing.T) {
 		want := &User{ID: "u1", Name: "Alice", Email: "alice@example.com"}
 		h := NewHandler(&fakeService{
-			createUserFn: func(name, email, password string) (*User, error) {
+			createUserFn: func(ctx context.Context, name, email, password string) (*User, error) {
 				return want, nil
 			},
 		})
@@ -104,7 +105,7 @@ func TestHandler_Login(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				h := NewHandler(&fakeService{
-					authenticateFn: func(email, password string) (string, error) {
+					authenticateFn: func(ctx context.Context, email, password string) (string, error) {
 						return "", tc.err
 					},
 				})
@@ -123,7 +124,7 @@ func TestHandler_Login(t *testing.T) {
 
 	t.Run("success returns 200 with a token", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			authenticateFn: func(email, password string) (string, error) {
+			authenticateFn: func(ctx context.Context, email, password string) (string, error) {
 				return "signed.jwt.token", nil
 			},
 		})
@@ -162,7 +163,7 @@ func TestHandler_Me(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			meFn: func(userID string) (*User, error) {
+			meFn: func(ctx context.Context, userID string) (*User, error) {
 				return nil, ErrUserNotFound
 			},
 		})
@@ -179,7 +180,7 @@ func TestHandler_Me(t *testing.T) {
 
 	t.Run("unexpected error returns 500", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			meFn: func(userID string) (*User, error) {
+			meFn: func(ctx context.Context, userID string) (*User, error) {
 				return nil, errors.New("disk exploded")
 			},
 		})
@@ -197,7 +198,7 @@ func TestHandler_Me(t *testing.T) {
 	t.Run("success returns 200", func(t *testing.T) {
 		want := &User{ID: "u1", Name: "Alice", Email: "alice@example.com"}
 		h := NewHandler(&fakeService{
-			meFn: func(userID string) (*User, error) {
+			meFn: func(ctx context.Context, userID string) (*User, error) {
 				return want, nil
 			},
 		})

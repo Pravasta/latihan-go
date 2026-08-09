@@ -60,7 +60,11 @@ type createProjectRequest struct {
 }
 
 func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
-	var req createProjectRequest
+	var (
+		req createProjectRequest
+		ctx = r.Context()
+	)
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		common.WriteError(w, http.StatusBadRequest, auth.ErrInvalidRequestBody.Error())
 		return
@@ -71,7 +75,7 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project, err := h.service.Create(ownerID, req.Name, req.Description)
+	project, err := h.service.Create(ctx, ownerID, req.Name, req.Description)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -82,11 +86,12 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	ownerID, ok := requireOwnerID(w, r)
+	ctx := r.Context()
 	if !ok {
 		return
 	}
 
-	projects, err := h.service.ListByOwner(ownerID)
+	projects, err := h.service.ListByOwner(ctx, ownerID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -99,6 +104,7 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := requirePathID(w, r)
+	ctx := r.Context()
 	if !ok {
 		return
 	}
@@ -108,7 +114,7 @@ func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project, err := h.service.GetByID(ownerID, idStr)
+	project, err := h.service.GetByID(ctx, ownerID, idStr)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -119,6 +125,7 @@ func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := requirePathID(w, r)
+	ctx := r.Context()
 	if !ok {
 		return
 	}
@@ -128,7 +135,7 @@ func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Delete(ownerID, idStr); err != nil {
+	if err := h.service.Delete(ctx, ownerID, idStr); err != nil {
 		writeServiceError(w, err)
 		return
 	}
@@ -148,7 +155,10 @@ type updateProjectResponse struct {
 }
 
 func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
-	var req updateProjectRequest
+	var (
+		req updateProjectRequest
+		ctx = r.Context()
+	)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		common.WriteError(w, http.StatusBadRequest, auth.ErrInvalidRequestBody.Error())
 		return
@@ -164,7 +174,7 @@ func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project, err := h.service.Update(ownerID, idStr, req.Name, req.Description)
+	project, err := h.service.Update(ctx, ownerID, idStr, req.Name, req.Description)
 	if err != nil {
 		writeServiceError(w, err)
 		return

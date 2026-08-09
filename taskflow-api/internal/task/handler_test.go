@@ -2,6 +2,7 @@ package task
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -60,7 +61,7 @@ func TestHandler_CreateTask(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				h := NewHandler(&fakeService{
-					createFn: func(ownerID, projectID, title, description string) (*Task, error) {
+					createFn: func(ctx context.Context, ownerID, projectID, title, description string) (*Task, error) {
 						return nil, tc.err
 					},
 				})
@@ -79,7 +80,7 @@ func TestHandler_CreateTask(t *testing.T) {
 	t.Run("success returns 201 with the created task", func(t *testing.T) {
 		want := &Task{ID: "t1", ProjectID: "p1", Title: "t", Description: "d", Status: TaskStatusTodo}
 		h := NewHandler(&fakeService{
-			createFn: func(ownerID, projectID, title, description string) (*Task, error) {
+			createFn: func(ctx context.Context, ownerID, projectID, title, description string) (*Task, error) {
 				return want, nil
 			},
 		})
@@ -123,7 +124,7 @@ func TestHandler_DeleteTask(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			deleteFn: func(ownerID, projectID, taskID string) error {
+			deleteFn: func(ctx context.Context, ownerID, projectID, taskID string) error {
 				return ErrTaskNotFound
 			},
 		})
@@ -139,7 +140,7 @@ func TestHandler_DeleteTask(t *testing.T) {
 
 	t.Run("success returns 200", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			deleteFn: func(ownerID, projectID, taskID string) error {
+			deleteFn: func(ctx context.Context, ownerID, projectID, taskID string) error {
 				return nil
 			},
 		})
@@ -175,7 +176,7 @@ func TestHandler_GetByID(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			getByIDFn: func(ownerID, projectID, taskID string) (*Task, error) {
+			getByIDFn: func(ctx context.Context, ownerID, projectID, taskID string) (*Task, error) {
 				return nil, ErrTaskNotFound
 			},
 		})
@@ -192,7 +193,7 @@ func TestHandler_GetByID(t *testing.T) {
 	t.Run("success returns 200", func(t *testing.T) {
 		want := &Task{ID: "t1", ProjectID: "p1"}
 		h := NewHandler(&fakeService{
-			getByIDFn: func(ownerID, projectID, taskID string) (*Task, error) {
+			getByIDFn: func(ctx context.Context, ownerID, projectID, taskID string) (*Task, error) {
 				return want, nil
 			},
 		})
@@ -251,7 +252,7 @@ func TestHandler_ListTasks(t *testing.T) {
 
 	t.Run("unexpected service error returns 500", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			listFn: func(ownerID, projectID string, query TaskQuery) (*TaskListResult, error) {
+			listFn: func(ctx context.Context, ownerID, projectID string, query TaskQuery) (*TaskListResult, error) {
 				return nil, errors.New("disk exploded")
 			},
 		})
@@ -268,7 +269,7 @@ func TestHandler_ListTasks(t *testing.T) {
 	t.Run("valid query params are all forwarded to the service", func(t *testing.T) {
 		var gotQuery TaskQuery
 		h := NewHandler(&fakeService{
-			listFn: func(ownerID, projectID string, query TaskQuery) (*TaskListResult, error) {
+			listFn: func(ctx context.Context, ownerID, projectID string, query TaskQuery) (*TaskListResult, error) {
 				gotQuery = query
 				return &TaskListResult{Tasks: []Task{}}, nil
 			},
@@ -293,7 +294,7 @@ func TestHandler_ListTasks(t *testing.T) {
 			PaginationMeta: PaginationMeta{Page: 1, Limit: 10, Total: 2, TotalPages: 1},
 		}
 		h := NewHandler(&fakeService{
-			listFn: func(ownerID, projectID string, query TaskQuery) (*TaskListResult, error) {
+			listFn: func(ctx context.Context, ownerID, projectID string, query TaskQuery) (*TaskListResult, error) {
 				return want, nil
 			},
 		})
@@ -349,7 +350,7 @@ func TestHandler_UpdateTask(t *testing.T) {
 
 	t.Run("validation error maps to 400", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateFn: func(ownerID, projectID, taskID, title, description string) (*Task, error) {
+			updateFn: func(ctx context.Context, ownerID, projectID, taskID, title, description string) (*Task, error) {
 				return nil, ErrInvalidTaskTitle
 			},
 		})
@@ -365,7 +366,7 @@ func TestHandler_UpdateTask(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateFn: func(ownerID, projectID, taskID, title, description string) (*Task, error) {
+			updateFn: func(ctx context.Context, ownerID, projectID, taskID, title, description string) (*Task, error) {
 				return nil, ErrTaskNotFound
 			},
 		})
@@ -382,7 +383,7 @@ func TestHandler_UpdateTask(t *testing.T) {
 	t.Run("success returns 200 with updated fields", func(t *testing.T) {
 		want := &Task{ID: "t1", ProjectID: "p1", Title: "New", Description: "New desc"}
 		h := NewHandler(&fakeService{
-			updateFn: func(ownerID, projectID, taskID, title, description string) (*Task, error) {
+			updateFn: func(ctx context.Context, ownerID, projectID, taskID, title, description string) (*Task, error) {
 				return want, nil
 			},
 		})
@@ -434,7 +435,7 @@ func TestHandler_UpdateTaskStatus(t *testing.T) {
 	// are client input errors and must be 400.
 	t.Run("invalid status value maps to 400, not 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateStatusFn: func(ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
+			updateStatusFn: func(ctx context.Context, ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
 				return nil, ErrInvalidTaskStatus
 			},
 		})
@@ -450,7 +451,7 @@ func TestHandler_UpdateTaskStatus(t *testing.T) {
 
 	t.Run("invalid status transition maps to 400, not 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateStatusFn: func(ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
+			updateStatusFn: func(ctx context.Context, ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
 				return nil, ErrInvalidTaskStatusTransition
 			},
 		})
@@ -466,7 +467,7 @@ func TestHandler_UpdateTaskStatus(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateStatusFn: func(ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
+			updateStatusFn: func(ctx context.Context, ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
 				return nil, ErrTaskNotFound
 			},
 		})
@@ -483,7 +484,7 @@ func TestHandler_UpdateTaskStatus(t *testing.T) {
 	t.Run("success returns 200 with updated status", func(t *testing.T) {
 		want := &Task{ID: "t1", ProjectID: "p1", Status: TaskStatusDone}
 		h := NewHandler(&fakeService{
-			updateStatusFn: func(ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
+			updateStatusFn: func(ctx context.Context, ownerID, projectID, taskID string, status TaskStatus) (*Task, error) {
 				return want, nil
 			},
 		})

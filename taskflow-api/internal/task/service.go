@@ -1,8 +1,8 @@
 package task
 
 import (
+	"context"
 	"errors"
-	"sort"
 	"strings"
 	"taskflow-api/internal/project"
 	"time"
@@ -12,27 +12,31 @@ import (
 
 // Dependency Interface for ProjectService
 type ProjectService interface {
-	GetByID(ownerID, projectID string) (*project.Project, error)
+	GetByID(ctx context.Context, ownerID, projectID string) (*project.Project, error)
 }
 
 type Service interface {
 	Create(
+		ctx context.Context,
 		ownerID,
 		projectID,
 		title,
 		description string,
 	) (*Task, error)
 	List(
+		ctx context.Context,
 		ownerID,
 		projectID string,
 		query TaskQuery,
 	) (*TaskListResult, error)
 	GetByID(
+		ctx context.Context,
 		ownerID,
 		projectID,
 		taskID string,
 	) (*Task, error)
 	Update(
+		ctx context.Context,
 		ownerID,
 		projectID,
 		taskID,
@@ -40,12 +44,14 @@ type Service interface {
 		description string,
 	) (*Task, error)
 	UpdateStatus(
+		ctx context.Context,
 		ownerID,
 		projectID,
 		taskID string,
 		status TaskStatus,
 	) (*Task, error)
 	Delete(
+		ctx context.Context,
 		ownerID,
 		projectID,
 		taskID string,
@@ -53,12 +59,12 @@ type Service interface {
 }
 
 type service struct {
-	storage        Storage
+	repo           Repository
 	projectService ProjectService
 }
 
 // Create implements Service.
-func (s *service) Create(ownerID string, projectID string, title string, description string) (*Task, error) {
+func (s *service) Create(ctx context.Context, ownerID string, projectID string, title string, description string) (*Task, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -75,20 +81,15 @@ func (s *service) Create(ownerID string, projectID string, title string, descrip
 	}
 
 	// Check if the project exists and belongs to the owner
-	if err := ensureProjectExists(s.projectService, ownerID, newProjectID); err != nil {
-		return nil, err
-	}
-
-	tasks, err := s.storage.Load()
-	if err != nil {
+	if err := ensureProjectExists(ctx, s.projectService, ownerID, newProjectID); err != nil {
 		return nil, err
 	}
 
 	timeNow := time.Now()
 
-	task := &Task{
+	newTask := &Task{
 		ID:          uuid.NewString(),
-		ProjectID:   projectID,
+		ProjectID:   newProjectID,
 		Title:       title,
 		Description: description,
 		Status:      TaskStatusTodo,
@@ -96,9 +97,7 @@ func (s *service) Create(ownerID string, projectID string, title string, descrip
 		UpdatedAt:   timeNow,
 	}
 
-	tasks = append(tasks, *task)
-
-	err = s.storage.Save(tasks)
+	task, err := s.repo.Create(ctx, newTask)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +106,7 @@ func (s *service) Create(ownerID string, projectID string, title string, descrip
 }
 
 // Delete implements Service.
-func (s *service) Delete(ownerID string, projectID string, taskID string) error {
+func (s *service) Delete(ctx context.Context, ownerID string, projectID string, taskID string) error {
 	if ownerID == "" {
 		return ErrInvalidOwnerID
 	}
@@ -118,27 +117,20 @@ func (s *service) Delete(ownerID string, projectID string, taskID string) error 
 		return ErrInvalidTaskID
 	}
 
-	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
+	if err := ensureProjectExists(ctx, s.projectService, ownerID, projectID); err != nil {
 		return err
 	}
 
-	tasks, err := s.storage.Load()
+	err := s.repo.Delete(ctx, ownerID, projectID, taskID)
 	if err != nil {
 		return err
 	}
 
-	for i, t := range tasks {
-		if t.ID == taskID && t.ProjectID == projectID {
-			tasks = append(tasks[:i], tasks[i+1:]...)
-			return s.storage.Save(tasks)
-		}
-	}
-
-	return ErrTaskNotFound
+	return nil
 }
 
 // GetByID implements Service.
-func (s *service) GetByID(ownerID string, projectID string, taskID string) (*Task, error) {
+func (s *service) GetByID(ctx context.Context, ownerID string, projectID string, taskID string) (*Task, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -149,26 +141,20 @@ func (s *service) GetByID(ownerID string, projectID string, taskID string) (*Tas
 		return nil, ErrInvalidTaskID
 	}
 
-	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
+	if err := ensureProjectExists(ctx, s.projectService, ownerID, projectID); err != nil {
 		return nil, err
 	}
 
-	tasks, err := s.storage.Load()
+	task, err := s.repo.GetByID(ctx, ownerID, projectID, taskID)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, t := range tasks {
-		if t.ID == taskID && t.ProjectID == projectID {
-			return &t, nil
-		}
-	}
-
-	return nil, ErrTaskNotFound
+	return task, nil
 }
 
 // List implements Service.
-func (s *service) List(ownerID string, projectID string, query TaskQuery) (*TaskListResult, error) {
+func (s *service) List(ctx context.Context, ownerID string, projectID string, query TaskQuery) (*TaskListResult, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -176,30 +162,24 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 		return nil, ErrInvalidProjectID
 	}
 
-	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
+	if err := ensureProjectExists(ctx, s.projectService, ownerID, projectID); err != nil {
 		return nil, err
 	}
 
-	filtered := make([]Task, 0)
-	var search string
-	var status TaskStatus
-	page := query.Page
-	if page < 1 {
+	if query.Page < 1 {
 		return nil, ErrInvalidPageNumber
 	}
-	limit := query.Limit
-	if limit < 1 || limit > 100 {
+
+	if query.Limit < 1 || query.Limit > 100 {
 		return nil, ErrInvalidLimitNumber
 	}
 
-	sortBy := query.Sort
-	if sortBy == "" {
-		sortBy = "created_at"
+	if query.Sort == "" {
+		query.Sort = "created_at"
 	}
 
-	order := query.Order
-	if order == "" {
-		order = OrderDesc
+	if query.Order == "" {
+		query.Order = OrderDesc
 	}
 
 	if query.Status != "" {
@@ -207,11 +187,6 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 			return nil, ErrInvalidTaskStatus
 		}
 
-		status = query.Status
-	}
-
-	if query.Search != "" {
-		search = strings.ToLower(query.Search)
 	}
 
 	if query.Sort != "" {
@@ -226,114 +201,16 @@ func (s *service) List(ownerID string, projectID string, query TaskQuery) (*Task
 		}
 	}
 
-	tasks, err := s.storage.Load()
+	tasks, err := s.repo.List(ctx, ownerID, projectID, query)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, t := range tasks {
-		if t.ProjectID == projectID {
-			filtered = append(filtered, t)
-		}
-	}
-
-	// Apply status filter
-	if status != "" {
-		var statusFiltered []Task
-		for _, t := range filtered {
-			if t.Status == status {
-				statusFiltered = append(statusFiltered, t)
-			}
-		}
-		filtered = statusFiltered
-	}
-
-	// Apply search filter
-	if search != "" {
-		var searchFiltered []Task
-		for _, t := range filtered {
-			if strings.Contains(strings.ToLower(t.Title), search) || strings.Contains(strings.ToLower(t.Description), search) {
-				searchFiltered = append(searchFiltered, t)
-			}
-		}
-		filtered = searchFiltered
-	}
-
-	// Apply sorting
-	switch sortBy {
-	case "title":
-		if order == OrderAsc {
-			sort.Slice(filtered, func(i, j int) bool {
-				return filtered[i].Title < filtered[j].Title
-			})
-		} else {
-			sort.Slice(filtered, func(i, j int) bool {
-				return filtered[i].Title > filtered[j].Title
-			})
-		}
-	case "created_at":
-		if order == OrderAsc {
-			sort.Slice(filtered, func(i, j int) bool {
-				return filtered[i].CreatedAt.Before(filtered[j].CreatedAt)
-			})
-		} else {
-			sort.Slice(filtered, func(i, j int) bool {
-				return filtered[i].CreatedAt.After(filtered[j].CreatedAt)
-			})
-		}
-	case "updated_at":
-		if order == OrderAsc {
-			sort.Slice(filtered, func(i, j int) bool {
-				return filtered[i].UpdatedAt.Before(filtered[j].UpdatedAt)
-			})
-		} else {
-			sort.Slice(filtered, func(i, j int) bool {
-				return filtered[i].UpdatedAt.After(filtered[j].UpdatedAt)
-			})
-		}
-	default:
-		return nil, ErrInvalidSortField
-	}
-
-	totalCount := len(filtered)
-
-	// Apply pagination
-	start := (page - 1) * limit
-	end := start + limit
-
-	totalPages := (totalCount + limit - 1) / limit
-
-	if start >= len(filtered) {
-		return &TaskListResult{
-			Tasks: []Task{},
-			PaginationMeta: PaginationMeta{
-				Page:       page,
-				Limit:      limit,
-				Total:      totalCount,
-				TotalPages: totalPages,
-			},
-		}, nil
-	}
-
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	filtered = filtered[start:end]
-
-	return &TaskListResult{
-		Tasks: filtered,
-		PaginationMeta: PaginationMeta{
-			Page:       page,
-			Limit:      limit,
-			Total:      totalCount,
-			TotalPages: totalPages,
-		},
-	}, nil
+	return tasks, nil
 }
 
 // Update implements Service.
-func (s *service) Update(ownerID string, projectID string, taskID string, title string, description string) (*Task, error) {
+func (s *service) Update(ctx context.Context, ownerID string, projectID string, taskID string, title string, description string) (*Task, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -349,35 +226,37 @@ func (s *service) Update(ownerID string, projectID string, taskID string, title 
 		return nil, ErrInvalidTaskTitle
 	}
 
-	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
+	if err := ensureProjectExists(ctx, s.projectService, ownerID, projectID); err != nil {
 		return nil, err
 	}
 
-	tasks, err := s.storage.Load()
+	// Update overwrites every column the repository's SQL touches, so the
+	// current status must be carried forward explicitly — otherwise editing
+	// title/description would silently reset status to empty.
+	existing, err := s.repo.GetByID(ctx, ownerID, projectID, taskID)
 	if err != nil {
 		return nil, err
 	}
 
-	for i, t := range tasks {
-		if t.ID == taskID && t.ProjectID == projectID {
-			t.Title = title
-			t.Description = description
-			t.UpdatedAt = time.Now()
-			tasks[i] = t
+	task, err := s.repo.Update(ctx, &Task{
+		ID:          taskID,
+		ProjectID:   projectID,
+		Title:       title,
+		Description: description,
+		Status:      existing.Status,
+		UpdatedAt:   time.Now(),
+	})
 
-			if err := s.storage.Save(tasks); err != nil {
-				return nil, err
-			}
-
-			return &t, nil
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ErrTaskNotFound
+	return task, nil
+
 }
 
 // UpdateStatus implements Service.
-func (s *service) UpdateStatus(ownerID string, projectID string, taskID string, status TaskStatus) (*Task, error) {
+func (s *service) UpdateStatus(ctx context.Context, ownerID string, projectID string, taskID string, status TaskStatus) (*Task, error) {
 	if ownerID == "" {
 		return nil, ErrInvalidOwnerID
 	}
@@ -388,11 +267,11 @@ func (s *service) UpdateStatus(ownerID string, projectID string, taskID string, 
 		return nil, ErrInvalidTaskID
 	}
 
-	if err := ensureProjectExists(s.projectService, ownerID, projectID); err != nil {
+	if err := ensureProjectExists(ctx, s.projectService, ownerID, projectID); err != nil {
 		return nil, err
 	}
 
-	tasks, err := s.storage.Load()
+	task, err := s.repo.GetByID(ctx, ownerID, projectID, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -401,33 +280,34 @@ func (s *service) UpdateStatus(ownerID string, projectID string, taskID string, 
 		return nil, ErrInvalidTaskStatus
 	}
 
-	for i, t := range tasks {
-		if t.ID == taskID && t.ProjectID == projectID {
-			if !isValidTransition(t.Status, status) {
-				return nil, ErrInvalidTaskStatusTransition
-			}
-
-			t.Status = status
-			t.UpdatedAt = time.Now()
-			tasks[i] = t
-
-			if err := s.storage.Save(tasks); err != nil {
-				return nil, err
-			}
-
-			return &t, nil
-		}
+	if !isValidTransition(task.Status, status) {
+		return nil, ErrInvalidTaskStatusTransition
 	}
 
-	return nil, ErrTaskNotFound
+	// Same reasoning as Update: carry forward title/description so this
+	// status-only change doesn't blank them out in the repository's SET.
+	newTask, err := s.repo.Update(ctx, &Task{
+		ID:          taskID,
+		ProjectID:   projectID,
+		Title:       task.Title,
+		Description: task.Description,
+		Status:      status,
+		UpdatedAt:   time.Now(),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newTask, nil
 }
 
 func NewService(
-	storage Storage,
+	repo Repository,
 	projectService ProjectService,
 ) Service {
 	return &service{
-		storage:        storage,
+		repo:           repo,
 		projectService: projectService,
 	}
 }
@@ -475,8 +355,8 @@ func isValidOrder(order Order) bool {
 // ensureProjectExists translates a project-lookup failure into task's own
 // ErrProjectNotFound. It fully owns that translation, so callers just need
 // to check err != nil — they should not re-inspect the error afterwards.
-func ensureProjectExists(projectService ProjectService, ownerID, projectID string) error {
-	projectData, err := projectService.GetByID(ownerID, projectID)
+func ensureProjectExists(ctx context.Context, projectService ProjectService, ownerID, projectID string) error {
+	projectData, err := projectService.GetByID(ctx, ownerID, projectID)
 	if err != nil {
 		if errors.Is(err, project.ErrProjectNotFound) {
 			return ErrProjectNotFound

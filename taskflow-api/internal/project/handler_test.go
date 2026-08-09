@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -55,7 +56,7 @@ func TestHandler_CreateProject(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				h := NewHandler(&fakeService{
-					createFn: func(ownerID, name, description string) (*Project, error) {
+					createFn: func(ctx context.Context, ownerID, name, description string) (*Project, error) {
 						return nil, tc.err
 					},
 				})
@@ -74,7 +75,7 @@ func TestHandler_CreateProject(t *testing.T) {
 	t.Run("success returns 201 with the created project", func(t *testing.T) {
 		want := &Project{ID: "p1", OwnerID: "owner-1", Name: "n", Description: "d"}
 		h := NewHandler(&fakeService{
-			createFn: func(ownerID, name, description string) (*Project, error) {
+			createFn: func(ctx context.Context, ownerID, name, description string) (*Project, error) {
 				return want, nil
 			},
 		})
@@ -125,7 +126,7 @@ func TestHandler_GetProject(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			getFn: func(ownerID, projectID string) (*Project, error) {
+			getFn: func(ctx context.Context, ownerID, projectID string) (*Project, error) {
 				return nil, ErrProjectNotFound
 			},
 		})
@@ -142,7 +143,7 @@ func TestHandler_GetProject(t *testing.T) {
 
 	t.Run("unexpected error returns 500", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			getFn: func(ownerID, projectID string) (*Project, error) {
+			getFn: func(ctx context.Context, ownerID, projectID string) (*Project, error) {
 				return nil, errors.New("disk exploded")
 			},
 		})
@@ -160,7 +161,7 @@ func TestHandler_GetProject(t *testing.T) {
 	t.Run("success returns 200", func(t *testing.T) {
 		want := &Project{ID: "p1", OwnerID: "owner-1"}
 		h := NewHandler(&fakeService{
-			getFn: func(ownerID, projectID string) (*Project, error) {
+			getFn: func(ctx context.Context, ownerID, projectID string) (*Project, error) {
 				return want, nil
 			},
 		})
@@ -191,7 +192,7 @@ func TestHandler_ListProjects(t *testing.T) {
 
 	t.Run("unexpected service error returns 500", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			listFn: func(ownerID string) ([]Project, error) {
+			listFn: func(ctx context.Context, ownerID string) ([]Project, error) {
 				return nil, errors.New("disk exploded")
 			},
 		})
@@ -208,7 +209,7 @@ func TestHandler_ListProjects(t *testing.T) {
 	t.Run("success returns 200 with data wrapper", func(t *testing.T) {
 		want := []Project{{ID: "p1", OwnerID: "owner-1"}, {ID: "p2", OwnerID: "owner-1"}}
 		h := NewHandler(&fakeService{
-			listFn: func(ownerID string) ([]Project, error) {
+			listFn: func(ctx context.Context, ownerID string) ([]Project, error) {
 				return want, nil
 			},
 		})
@@ -261,7 +262,7 @@ func TestHandler_DeleteProject(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			deleteFn: func(ownerID, projectID string) error {
+			deleteFn: func(ctx context.Context, ownerID, projectID string) error {
 				return ErrProjectNotFound
 			},
 		})
@@ -278,7 +279,7 @@ func TestHandler_DeleteProject(t *testing.T) {
 
 	t.Run("success returns 200", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			deleteFn: func(ownerID, projectID string) error {
+			deleteFn: func(ctx context.Context, ownerID, projectID string) error {
 				return nil
 			},
 		})
@@ -335,7 +336,7 @@ func TestHandler_UpdateProject(t *testing.T) {
 
 	t.Run("validation error maps to 400", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateFn: func(ownerID, projectID, name, description string) (*Project, error) {
+			updateFn: func(ctx context.Context, ownerID, projectID, name, description string) (*Project, error) {
 				return nil, ErrInvalidProjectName
 			},
 		})
@@ -352,7 +353,7 @@ func TestHandler_UpdateProject(t *testing.T) {
 
 	t.Run("not found maps to 404", func(t *testing.T) {
 		h := NewHandler(&fakeService{
-			updateFn: func(ownerID, projectID, name, description string) (*Project, error) {
+			updateFn: func(ctx context.Context, ownerID, projectID, name, description string) (*Project, error) {
 				return nil, ErrProjectNotFound
 			},
 		})
@@ -370,7 +371,7 @@ func TestHandler_UpdateProject(t *testing.T) {
 	t.Run("success returns 200 with updated fields", func(t *testing.T) {
 		want := &Project{ID: "p1", Name: "New", Description: "New desc"}
 		h := NewHandler(&fakeService{
-			updateFn: func(ownerID, projectID, name, description string) (*Project, error) {
+			updateFn: func(ctx context.Context, ownerID, projectID, name, description string) (*Project, error) {
 				return want, nil
 			},
 		})

@@ -54,12 +54,14 @@ func (h *Handler) Register(
 ) {
 	var req createUserRequest
 
+	ctx := r.Context()
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		common.WriteError(w, http.StatusBadRequest, ErrInvalidRequestBody.Error())
 		return
 	}
 
-	user, err := h.service.CreateUser(req.Name, req.Email, req.Password)
+	user, err := h.service.CreateUser(ctx, req.Name, req.Email, req.Password)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -95,12 +97,14 @@ func (h *Handler) Login(
 ) {
 	var req loginUserRequest
 
+	ctx := r.Context()
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		common.WriteError(w, http.StatusBadRequest, ErrInvalidRequestBody.Error())
 		return
 	}
 
-	token, err := h.service.Authenticate(req.Email, req.Password)
+	token, err := h.service.Authenticate(ctx, req.Email, req.Password)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -121,13 +125,15 @@ func (h *Handler) Me(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	userID, ok := common.GetUserID(r.Context())
+	ctx := r.Context()
+
+	userID, ok := common.GetUserID(ctx)
 	if !ok {
 		common.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
-	user, err := h.service.Me(userID)
+	user, err := h.service.Me(ctx, userID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
