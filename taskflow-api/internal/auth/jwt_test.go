@@ -1,15 +1,20 @@
 package auth
 
 import (
+	"taskflow-api/internal/config"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
+func newTestJWTService(secret string) *JWTService {
+	return NewJWTService(&config.Config{JWT: config.JWTConfig{Secret: secret}})
+}
+
 func TestJWTService_GenerateAndParse(t *testing.T) {
 	t.Run("round trip returns the original user id", func(t *testing.T) {
-		svc := NewJWTService("test-secret")
+		svc := newTestJWTService("test-secret")
 
 		token, err := svc.Generate("user-1")
 		if err != nil {
@@ -26,7 +31,7 @@ func TestJWTService_GenerateAndParse(t *testing.T) {
 	})
 
 	t.Run("malformed token is rejected", func(t *testing.T) {
-		svc := NewJWTService("test-secret")
+		svc := newTestJWTService("test-secret")
 
 		if _, err := svc.Parse("not-a-jwt"); err == nil {
 			t.Fatal("expected an error, got nil")
@@ -34,8 +39,8 @@ func TestJWTService_GenerateAndParse(t *testing.T) {
 	})
 
 	t.Run("token signed with a different secret is rejected", func(t *testing.T) {
-		issuer := NewJWTService("secret-a")
-		verifier := NewJWTService("secret-b")
+		issuer := newTestJWTService("secret-a")
+		verifier := newTestJWTService("secret-b")
 
 		token, err := issuer.Generate("user-1")
 		if err != nil {
@@ -48,7 +53,7 @@ func TestJWTService_GenerateAndParse(t *testing.T) {
 	})
 
 	t.Run("expired token is rejected", func(t *testing.T) {
-		svc := NewJWTService("test-secret")
+		svc := newTestJWTService("test-secret")
 
 		claims := jwt.MapClaims{
 			"user_id": "user-1",
@@ -66,7 +71,7 @@ func TestJWTService_GenerateAndParse(t *testing.T) {
 	})
 
 	t.Run("token with a non-string user_id claim is rejected", func(t *testing.T) {
-		svc := NewJWTService("test-secret")
+		svc := newTestJWTService("test-secret")
 
 		claims := jwt.MapClaims{
 			"user_id": 12345,
@@ -84,7 +89,7 @@ func TestJWTService_GenerateAndParse(t *testing.T) {
 	})
 
 	t.Run("token signed with a non-HMAC method is rejected", func(t *testing.T) {
-		svc := NewJWTService("test-secret")
+		svc := newTestJWTService("test-secret")
 
 		claims := jwt.MapClaims{
 			"user_id": "user-1",

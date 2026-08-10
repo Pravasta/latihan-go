@@ -9,7 +9,7 @@ import (
 )
 
 func TestAuthMiddleware_Authenticate(t *testing.T) {
-	jwtSvc := NewJWTService("test-secret")
+	jwtSvc := newTestJWTService("test-secret")
 	mw := NewAuthMiddleware(jwtSvc)
 
 	newNextHandler := func(called *bool, gotUserID *string) http.Handler {
