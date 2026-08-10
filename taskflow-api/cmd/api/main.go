@@ -39,7 +39,7 @@ func main() {
 	// SERVICES
 	jwt := auth.NewJWTService(secretKey)
 	authService := auth.NewService(userRepository, jwt)
-	projectService := project.NewService(projectRepository)
+	projectService := project.NewService(projectRepository, taskRepository)
 	taskService := task.NewService(taskRepository, projectRepository)
 	authMiddleware := auth.NewAuthMiddleware(jwt)
 

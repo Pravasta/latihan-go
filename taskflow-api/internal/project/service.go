@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -20,7 +21,8 @@ type Service interface {
 }
 
 type service struct {
-	repo Repository
+	repo        Repository
+	taskDeleter TaskDeleter
 }
 
 // Create implements Service.
@@ -65,12 +67,16 @@ func (s *service) Delete(ctx context.Context, ownerID string, projectID string) 
 		return ErrInvalidProjectID
 	}
 
-	err := s.repo.Delete(ctx, ownerID, projectID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	// Delete the project's tasks and the project itself as one atomic
+	// unit: if either step fails, WithTransaction rolls both back, so we
+	// never end up with a deleted project whose tasks survived (or the
+	// reverse).
+	return s.repo.WithTransaction(ctx, func(tx *sql.Tx) error {
+		if err := s.taskDeleter.DeleteAllByProjectTx(ctx, tx, projectID); err != nil {
+			return err
+		}
+		return s.repo.DeleteTx(ctx, tx, ownerID, projectID)
+	})
 }
 
 // GetByID implements Service.
@@ -139,6 +145,6 @@ func (s *service) Update(ctx context.Context, ownerID string, projectID string, 
 	return result, nil
 }
 
-func NewService(repo Repository) Service {
-	return &service{repo: repo}
+func NewService(repo Repository, taskDeleter TaskDeleter) Service {
+	return &service{repo: repo, taskDeleter: taskDeleter}
 }

@@ -202,3 +202,41 @@ func (r *TaskRepository) Delete(ctx context.Context, ownerID, projectID, taskID 
 
 	return nil
 }
+
+// DeleteAllByProjectTx removes every task under a project, as part of a
+// cascade-delete when the project itself is deleted. Zero matching rows is
+// a normal outcome (a project with no tasks), not an error — unlike
+// DeleteTx below, which targets one specific task that is expected to
+// exist.
+func (r *TaskRepository) DeleteAllByProjectTx(ctx context.Context, tx *sql.Tx, projectID string) error {
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM tasks
+		WHERE project_id = $1
+	`, projectID); err != nil {
+		return fmt.Errorf("failed to delete tasks for project in transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *TaskRepository) DeleteTx(ctx context.Context, tx *sql.Tx, ownerID, projectID, taskID string) error {
+	result, err := tx.ExecContext(ctx, `
+		DELETE FROM tasks
+		WHERE id = $1 AND project_id = $2
+	`, taskID, projectID)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete task in transaction: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected in transaction: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return tsx.ErrTaskNotFound
+	}
+
+	return nil
+}

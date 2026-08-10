@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 )
 
@@ -9,13 +10,19 @@ import (
 // for (wrong method name, wrong signature), this fails the build instead
 // of silently compiling as an unrelated type with no test ever catching it.
 var (
-	_ Repository = (*fakeRepository)(nil)
-	_ Service    = (*fakeService)(nil)
+	_ Repository  = (*fakeRepository)(nil)
+	_ TaskDeleter = (*fakeTaskDeleter)(nil)
+	_ Service     = (*fakeService)(nil)
 )
 
 // fakeRepository is a test double for Repository. It keeps projects in
 // memory and lets a test force any operation to fail, so service_test.go
 // can exercise error paths without touching a real database.
+//
+// WithTransaction doesn't run against a real *sql.Tx — it just invokes fn
+// with a nil tx, since nothing in this fake actually issues SQL. That's
+// fine here because fakeRepository.DeleteTx and fakeTaskDeleter below both
+// ignore the tx argument too; they mutate in-memory state directly instead.
 type fakeRepository struct {
 	projects  []Project
 	createErr error
@@ -23,7 +30,31 @@ type fakeRepository struct {
 	getErr    error
 	updateErr error
 	deleteErr error
+	beginErr  error
 	nextID    int
+}
+
+func (f *fakeRepository) WithTransaction(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	if f.beginErr != nil {
+		return f.beginErr
+	}
+	return fn(nil)
+}
+
+// fakeTaskDeleter is a test double for TaskDeleter, used to verify that
+// Service.Delete cascades into task deletion and that a cascade failure
+// stops the project from being deleted too.
+type fakeTaskDeleter struct {
+	err        error
+	calledWith []string // projectIDs DeleteAllByProjectTx was invoked with
+}
+
+func (f *fakeTaskDeleter) DeleteAllByProjectTx(ctx context.Context, tx *sql.Tx, projectID string) error {
+	f.calledWith = append(f.calledWith, projectID)
+	if f.err != nil {
+		return f.err
+	}
+	return nil
 }
 
 func (f *fakeRepository) Create(ctx context.Context, p *Project) (*Project, error) {
@@ -79,7 +110,7 @@ func (f *fakeRepository) Update(ctx context.Context, p *Project) (*Project, erro
 	return nil, ErrProjectNotFound
 }
 
-func (f *fakeRepository) Delete(ctx context.Context, ownerID, projectID string) error {
+func (f *fakeRepository) DeleteTx(ctx context.Context, tx *sql.Tx, ownerID, projectID string) error {
 	if f.deleteErr != nil {
 		return f.deleteErr
 	}
