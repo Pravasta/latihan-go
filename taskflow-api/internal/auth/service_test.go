@@ -10,7 +10,7 @@ import (
 const validPassword = "Passw0rd!"
 
 func testJWT() *JWTService {
-	return NewJWTService("test-secret")
+	return newTestJWTService("test-secret")
 }
 
 func TestService_CreateUser(t *testing.T) {

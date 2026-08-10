@@ -17,14 +17,30 @@ A simple task/project management REST API built with Go's standard `net/http`, b
 Copy/create a `.env` file in the project root:
 
 ```env
-db_host=localhost
-db_port=5432
-db_user=taskflow
-db_password=taskflow
-db_name=taskflow
+APP_PORT=8080
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=taskflow
+DB_PASSWORD=taskflow
+DB_NAME=taskflow
+
+JWT_SECRET=my-secret
+JWT_EXPIRE=24h
 ```
 
-These values must match the `postgres` service in `docker-compose.yaml`.
+`DB_*` values must match the `postgres` service in `docker-compose.yaml`. All variables are loaded by `internal/config` (via [`godotenv`](https://github.com/joho/godotenv)) and fall back to the defaults above if unset — `.env` is optional in that sense, but you should still set your own `JWT_SECRET` rather than rely on the default outside local dev.
+
+| Variable | Default | Used for |
+|---|---|---|
+| `APP_PORT` | `8080` | HTTP server listen port |
+| `DB_HOST` | `localhost` | Postgres host |
+| `DB_PORT` | `5432` | Postgres port |
+| `DB_USER` | `taskflow` | Postgres user |
+| `DB_PASSWORD` | `taskflow` | Postgres password |
+| `DB_NAME` | `taskflow` | Postgres database name |
+| `JWT_SECRET` | `my-secret` | HMAC signing secret for auth tokens |
+| `JWT_EXPIRE` | `24h` | Token expiry duration |
 
 ## 2. Start PostgreSQL
 
@@ -81,7 +97,7 @@ go mod download
 go run cmd/api/main.go
 ```
 
-The server starts on `http://localhost:8080`.
+The server starts on `http://localhost:$APP_PORT` (`8080` by default). `cmd/api/main.go` gets its config, database connection, and JWT service from a single `bootstrap.NewApp()` call — see `internal/bootstrap/app.go` and `internal/config/config.go` if you need to wire up another dependency the same way.
 
 ## Running tests
 

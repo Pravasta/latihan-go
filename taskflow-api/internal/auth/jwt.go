@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"taskflow-api/internal/config"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -11,9 +12,9 @@ type JWTService struct {
 	secret []byte
 }
 
-func NewJWTService(secret string) *JWTService {
+func NewJWTService(cfg *config.Config) *JWTService {
 	return &JWTService{
-		secret: []byte(secret),
+		secret: []byte(cfg.JWT.Secret),
 	}
 }
 

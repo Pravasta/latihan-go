@@ -3,7 +3,7 @@ package postgres
 import (
 	"database/sql"
 	"fmt"
-	"os"
+	"taskflow-api/internal/config"
 )
 
 // Bertanggung Jawab kepada Open Connection - Ping - Close
@@ -12,10 +12,9 @@ type DB struct {
 	*sql.DB
 }
 
-func NewDB() (*DB, error) {
+func ConnectDB(cfg *config.Config) (*DB, error) {
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("db_host"), os.Getenv("db_port"), os.Getenv("db_user"),
-		os.Getenv("db_password"), os.Getenv("db_name"),
+		cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.Name,
 	)
 
 	sqlDB, err := sql.Open("postgres", psqlInfo)
