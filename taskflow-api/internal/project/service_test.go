@@ -24,7 +24,7 @@ func TestService_Create(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				svc := NewService(&fakeRepository{})
+				svc := NewService(&fakeRepository{}, &fakeTaskDeleter{})
 
 				_, err := svc.Create(ctx, tc.ownerID, tc.projectName, tc.description)
 				if !errors.Is(err, tc.wantErr) {
@@ -36,7 +36,7 @@ func TestService_Create(t *testing.T) {
 
 	t.Run("success persists a new project", func(t *testing.T) {
 		repo := &fakeRepository{}
-		svc := NewService(repo)
+		svc := NewService(repo, &fakeTaskDeleter{})
 
 		got, err := svc.Create(ctx, "owner-1", "My Project", "desc")
 		if err != nil {
@@ -54,7 +54,7 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("create failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeRepository{createErr: errors.New("connection refused")})
+		svc := NewService(&fakeRepository{createErr: errors.New("connection refused")}, &fakeTaskDeleter{})
 
 		if _, err := svc.Create(ctx, "owner-1", "Name", "Desc"); err == nil {
 			t.Fatal("expected error, got nil")
@@ -67,7 +67,7 @@ func TestService_GetByID(t *testing.T) {
 	existing := Project{ID: "p1", OwnerID: "owner-1", Name: "Existing"}
 
 	t.Run("found for the correct owner", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}})
+		svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 		got, err := svc.GetByID(ctx, "owner-1", "p1")
 		if err != nil {
@@ -79,7 +79,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("not found for a different owner", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}})
+		svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 		_, err := svc.GetByID(ctx, "owner-2", "p1")
 		if !errors.Is(err, ErrProjectNotFound) {
@@ -88,7 +88,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("not found for unknown id", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}})
+		svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 		_, err := svc.GetByID(ctx, "owner-1", "does-not-exist")
 		if !errors.Is(err, ErrProjectNotFound) {
@@ -97,7 +97,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("missing owner id", func(t *testing.T) {
-		svc := NewService(&fakeRepository{})
+		svc := NewService(&fakeRepository{}, &fakeTaskDeleter{})
 
 		_, err := svc.GetByID(ctx, "", "p1")
 		if !errors.Is(err, ErrInvalidOwnerID) {
@@ -106,7 +106,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("missing project id", func(t *testing.T) {
-		svc := NewService(&fakeRepository{})
+		svc := NewService(&fakeRepository{}, &fakeTaskDeleter{})
 
 		_, err := svc.GetByID(ctx, "owner-1", "")
 		if !errors.Is(err, ErrInvalidProjectID) {
@@ -115,7 +115,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("lookup failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeRepository{getErr: errors.New("connection refused")})
+		svc := NewService(&fakeRepository{getErr: errors.New("connection refused")}, &fakeTaskDeleter{})
 
 		if _, err := svc.GetByID(ctx, "owner-1", "p1"); err == nil {
 			t.Fatal("expected error, got nil")
@@ -131,7 +131,7 @@ func TestService_ListByOwner(t *testing.T) {
 		{ID: "p3", OwnerID: "owner-1"},
 	}
 
-	svc := NewService(&fakeRepository{projects: projects})
+	svc := NewService(&fakeRepository{projects: projects}, &fakeTaskDeleter{})
 
 	got, err := svc.ListByOwner(ctx, "owner-1")
 	if err != nil {
@@ -147,7 +147,7 @@ func TestService_ListByOwner(t *testing.T) {
 	}
 
 	t.Run("missing owner id", func(t *testing.T) {
-		svc := NewService(&fakeRepository{})
+		svc := NewService(&fakeRepository{}, &fakeTaskDeleter{})
 
 		_, err := svc.ListByOwner(ctx, "")
 		if !errors.Is(err, ErrInvalidOwnerID) {
@@ -156,7 +156,7 @@ func TestService_ListByOwner(t *testing.T) {
 	})
 
 	t.Run("list failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeRepository{listErr: errors.New("connection refused")})
+		svc := NewService(&fakeRepository{listErr: errors.New("connection refused")}, &fakeTaskDeleter{})
 
 		if _, err := svc.ListByOwner(ctx, "owner-1"); err == nil {
 			t.Fatal("expected error, got nil")
@@ -185,7 +185,7 @@ func TestService_Update(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				svc := NewService(&fakeRepository{projects: []Project{existing}})
+				svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 				_, err := svc.Update(ctx, tc.ownerID, tc.projectID, tc.projectName, tc.description)
 				if !errors.Is(err, tc.wantErr) {
@@ -196,7 +196,7 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("update failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}, updateErr: errors.New("connection refused")})
+		svc := NewService(&fakeRepository{projects: []Project{existing}, updateErr: errors.New("connection refused")}, &fakeTaskDeleter{})
 
 		if _, err := svc.Update(ctx, "owner-1", "p1", "New", "New desc"); err == nil {
 			t.Fatal("expected error, got nil")
@@ -205,7 +205,7 @@ func TestService_Update(t *testing.T) {
 
 	t.Run("updates name and description", func(t *testing.T) {
 		repo := &fakeRepository{projects: []Project{existing}}
-		svc := NewService(repo)
+		svc := NewService(repo, &fakeTaskDeleter{})
 
 		got, err := svc.Update(ctx, "owner-1", "p1", "New", "New desc")
 		if err != nil {
@@ -220,7 +220,7 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("not found for a different owner", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}})
+		svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 		_, err := svc.Update(ctx, "owner-2", "p1", "New", "New desc")
 		if !errors.Is(err, ErrProjectNotFound) {
@@ -246,7 +246,7 @@ func TestService_Delete(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				svc := NewService(&fakeRepository{projects: []Project{existing}})
+				svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 				err := svc.Delete(ctx, tc.ownerID, tc.projectID)
 				if !errors.Is(err, tc.wantErr) {
@@ -256,17 +256,10 @@ func TestService_Delete(t *testing.T) {
 		}
 	})
 
-	t.Run("delete failure is returned to the caller", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}, deleteErr: errors.New("connection refused")})
-
-		if err := svc.Delete(ctx, "owner-1", "p1"); err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
-
-	t.Run("deletes an existing project", func(t *testing.T) {
+	t.Run("deletes the project's tasks before the project itself", func(t *testing.T) {
 		repo := &fakeRepository{projects: []Project{existing}}
-		svc := NewService(repo)
+		taskDeleter := &fakeTaskDeleter{}
+		svc := NewService(repo, taskDeleter)
 
 		if err := svc.Delete(ctx, "owner-1", "p1"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -274,10 +267,42 @@ func TestService_Delete(t *testing.T) {
 		if len(repo.projects) != 0 {
 			t.Fatalf("expected project to be removed, got %d remaining", len(repo.projects))
 		}
+		if len(taskDeleter.calledWith) != 1 || taskDeleter.calledWith[0] != "p1" {
+			t.Fatalf("expected DeleteAllByProjectTx called with %q, got %v", "p1", taskDeleter.calledWith)
+		}
+	})
+
+	t.Run("task cascade failure rolls back and the project survives", func(t *testing.T) {
+		repo := &fakeRepository{projects: []Project{existing}}
+		taskDeleter := &fakeTaskDeleter{err: errors.New("connection refused")}
+		svc := NewService(repo, taskDeleter)
+
+		if err := svc.Delete(ctx, "owner-1", "p1"); err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if len(repo.projects) != 1 {
+			t.Fatalf("expected project to survive the rolled-back transaction, got %d remaining", len(repo.projects))
+		}
+	})
+
+	t.Run("begin transaction failure is returned to the caller", func(t *testing.T) {
+		svc := NewService(&fakeRepository{projects: []Project{existing}, beginErr: errors.New("connection refused")}, &fakeTaskDeleter{})
+
+		if err := svc.Delete(ctx, "owner-1", "p1"); err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("delete failure is returned to the caller", func(t *testing.T) {
+		svc := NewService(&fakeRepository{projects: []Project{existing}, deleteErr: errors.New("connection refused")}, &fakeTaskDeleter{})
+
+		if err := svc.Delete(ctx, "owner-1", "p1"); err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 
 	t.Run("not found for a different owner", func(t *testing.T) {
-		svc := NewService(&fakeRepository{projects: []Project{existing}})
+		svc := NewService(&fakeRepository{projects: []Project{existing}}, &fakeTaskDeleter{})
 
 		err := svc.Delete(ctx, "owner-2", "p1")
 		if !errors.Is(err, ErrProjectNotFound) {

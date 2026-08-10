@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -146,6 +147,29 @@ func (f *fakeRepository) Delete(ctx context.Context, ownerID, projectID, taskID 
 		}
 	}
 	return ErrTaskNotFound
+}
+
+// DeleteTx and DeleteAllByProjectTx aren't exercised by task's own service
+// tests (task.Service doesn't call them) — they only exist so fakeRepository
+// keeps satisfying Repository as the interface grows. project's service
+// tests are what actually exercise cascade-delete behavior, via
+// project.TaskDeleter's fake.
+func (f *fakeRepository) DeleteTx(ctx context.Context, tx *sql.Tx, ownerID, projectID, taskID string) error {
+	return f.Delete(ctx, ownerID, projectID, taskID)
+}
+
+func (f *fakeRepository) DeleteAllByProjectTx(ctx context.Context, tx *sql.Tx, projectID string) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	remaining := f.tasks[:0]
+	for _, t := range f.tasks {
+		if t.ProjectID != projectID {
+			remaining = append(remaining, t)
+		}
+	}
+	f.tasks = remaining
+	return nil
 }
 
 type fakeService struct {

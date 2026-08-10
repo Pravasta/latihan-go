@@ -93,19 +93,26 @@ func (r *ProjectRepository) Update(ctx context.Context, proj *project.Project) (
 	return &updatedProject, nil
 }
 
-func (r *ProjectRepository) Delete(ctx context.Context, ownerID, projectID string) error {
-	result, err := r.db.ExecContext(ctx, `
+// WithTransaction lets Service run a project deletion and a task
+// cascade-delete as one atomic unit, without Service knowing anything
+// about *DB — it only ever sees the *sql.Tx passed into fn.
+func (r *ProjectRepository) WithTransaction(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	return WithTransaction(ctx, r.db, fn)
+}
+
+func (r *ProjectRepository) DeleteTx(ctx context.Context, tx *sql.Tx, ownerID, projectID string) error {
+	result, err := tx.ExecContext(ctx, `
 		DELETE FROM projects
 		WHERE owner_id = $1 AND id = $2
 	`, ownerID, projectID)
 
 	if err != nil {
-		return fmt.Errorf("failed to delete project: %w", err)
+		return fmt.Errorf("failed to delete project in transaction: %w", err)
 	}
 
 	affectedRows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
+		return fmt.Errorf("failed to get affected rows in transaction: %w", err)
 	}
 
 	if affectedRows == 0 {
