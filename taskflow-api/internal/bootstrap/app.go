@@ -16,6 +16,14 @@ type App struct {
 	Server     *http.Server
 }
 
+func (a *App) Close() {
+	a.DB.Close()
+}
+
+func (a *App) Run() error {
+	return a.Server.ListenAndServe()
+}
+
 func NewApp() (*App, error) {
 	cfg, err := config.NewConfig()
 	if err != nil {
