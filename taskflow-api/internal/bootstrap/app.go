@@ -1,9 +1,11 @@
 package bootstrap
 
 import (
+	"log/slog"
 	"net/http"
 	"taskflow-api/internal/auth"
 	"taskflow-api/internal/config"
+	"taskflow-api/internal/logger"
 	"taskflow-api/internal/project"
 	"taskflow-api/internal/repository/postgres"
 	"taskflow-api/internal/task"
@@ -14,10 +16,11 @@ type App struct {
 	DB         *postgres.DB
 	JWTService *auth.JWTService
 	Server     *http.Server
+	Logger     *slog.Logger
 }
 
-func (a *App) Close() {
-	a.DB.Close()
+func (a *App) Close() error {
+	return a.DB.Close()
 }
 
 func (a *App) Run() error {
@@ -26,9 +29,12 @@ func (a *App) Run() error {
 
 func NewApp() (*App, error) {
 	cfg, err := config.NewConfig()
+
 	if err != nil {
 		return nil, err
 	}
+
+	log := logger.NewLogger(cfg)
 
 	db, err := postgres.ConnectDB(cfg)
 	if err != nil {
@@ -145,6 +151,7 @@ func NewApp() (*App, error) {
 		Config:     cfg,
 		DB:         db,
 		JWTService: jwtService,
+		Logger:     log,
 		Server:     &http.Server{Addr: addr, Handler: mux},
 	}, nil
 }
