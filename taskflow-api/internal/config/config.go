@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -11,13 +11,15 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
+	Env      EnvConfig
+	Logger   LoggerConfig
 }
 
 func NewConfig() (*Config, error) {
 	err := godotenv.Load()
 
 	if err != nil {
-		log.Println("[Main] No .env file found, relying on environment variables")
+		slog.Warn("[Config] No .env file found, relying on environment variables", "error", err)
 	}
 
 	return &Config{
@@ -34,6 +36,13 @@ func NewConfig() (*Config, error) {
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", "my-secret"),
 			Expire: getEnv("JWT_EXPIRE", "24h"),
+		},
+		Env: EnvConfig{
+			Environment: getEnv("APP_ENV", "development"),
+		},
+		Logger: LoggerConfig{
+			Level:  getEnv("LOG_LEVEL", "debug"),
+			Format: getEnv("LOG_FORMAT", "text"),
 		},
 	}, nil
 }
@@ -57,7 +66,16 @@ type DatabaseConfig struct {
 	Name     string `env:"DB_NAME" envDefault:"taskflow"`
 }
 
+type EnvConfig struct {
+	Environment string `env:"APP_ENV" envDefault:"development"`
+}
+
 type JWTConfig struct {
 	Secret string `env:"JWT_SECRET" envDefault:"my-secret"`
 	Expire string `env:"JWT_EXPIRE" envDefault:"24h"`
+}
+
+type LoggerConfig struct {
+	Level  string `env:"LOG_LEVEL" envDefault:"debug"`
+	Format string `env:"LOG_FORMAT" envDefault:"text"`
 }

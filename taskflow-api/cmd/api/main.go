@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"taskflow-api/internal/bootstrap"
@@ -13,10 +14,11 @@ import (
 func main() {
 	app, err := bootstrap.NewApp()
 	if err != nil {
-		log.Fatalf("Failed to bootstrap application: %v", err)
+		slog.Error("Failed to initialize application", "error", err)
+		os.Exit(1)
 	}
 
-	log.Printf("Starting server on %s", app.Server.Addr)
+	slog.Info("Application initialized successfully")
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
@@ -28,13 +30,13 @@ func main() {
 
 	go func() {
 		if err := app.Run(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to run application: %v", err)
+			app.Logger.Error("Failed to run application", "error", err)
 		}
 	}()
 
 	<-ctx.Done()
 
-	log.Println("Shutting down gracefully, press Ctrl+C again to force")
+	app.Logger.Info("Shutting down gracefully, press Ctrl+C again to force")
 
 	shutdownCtx, cancel := context.WithTimeout(
 		context.Background(),
@@ -44,14 +46,14 @@ func main() {
 	defer cancel()
 
 	if err := app.Server.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		app.Logger.Error("Server forced to shutdown", "error", err)
 	}
 
 	if err := app.Close(); err != nil {
-		log.Fatalf("Failed to close application: %v", err)
+		app.Logger.Error("Failed to close application", "error", err)
 	}
 
-	log.Println("Server exiting")
+	app.Logger.Info("Server exiting")
 }
 
 // To Run

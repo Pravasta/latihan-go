@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
+	"log/slog"
 	"taskflow-api/internal/auth"
 
 	"github.com/lib/pq"
@@ -29,13 +29,13 @@ func (r *AuthRepository) Create(ctx context.Context, user *auth.User) (*auth.Use
 	err := row.Scan(&createdUser.ID, &createdUser.Name, &createdUser.Email, &createdUser.PasswordHash, &createdUser.CreatedAt)
 	if err != nil {
 		if isUniqueViolationError(err) {
-			log.Printf("[AuthRepository-ERROR] Email already exists: %v", err)
+			slog.Error("Email already exists", "error", err)
 			return nil, auth.ErrEmailAlreadyExists
 		}
-		log.Printf("[AuthRepository-ERROR] Failed to create user: %v", err)
+		slog.Error("Failed to create user", "error", err)
 		return nil, err
 	}
-	log.Printf("[AuthRepository-INFO] User created successfully: %v", createdUser)
+	slog.Info("User created successfully", "user_id", createdUser.ID, "email", createdUser.Email)
 	return &createdUser, nil
 }
 
@@ -50,13 +50,13 @@ func (r *AuthRepository) FindByID(ctx context.Context, id string) (*auth.User, e
 	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Printf("[AuthRepository-ERROR] User not found: %v", err)
+			slog.Warn("User not found by ID", "user_id", id)
 			return nil, auth.ErrUserNotFound
 		}
-		log.Printf("[AuthRepository-ERROR] Failed to find user by ID: %v", err)
+		slog.Error("Failed to find user by ID", "user_id", id, "error", err)
 		return nil, err
 	}
-	log.Printf("[AuthRepository-INFO] User found by ID: %v", user)
+	slog.Info("User found by ID", "user_id", user.ID, "email", user.Email)
 	return &user, nil
 }
 
@@ -71,13 +71,13 @@ func (r *AuthRepository) FindByEmail(ctx context.Context, email string) (*auth.U
 	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Printf("[AuthRepository-ERROR] User not found: %v", err)
+			slog.Warn("User not found by email", "email", email)
 			return nil, auth.ErrUserNotFound
 		}
-		log.Printf("[AuthRepository-ERROR] Failed to find user by email: %v", err)
+		slog.Error("Failed to find user by email", "email", email, "error", err)
 		return nil, err
 	}
-	log.Printf("[AuthRepository-INFO] User found by email: %v", user)
+	slog.Info("User found by email", "user_id", user.ID, "email", user.Email)
 	return &user, nil
 }
 
